@@ -1,0 +1,22 @@
+.venv/
+.idea/
+.mplconfig/
+__pycache__/
+*.pyc
+
+# Data and generated outputs
+Anes_Dataset_10Demo_MillerRAG/
+*.jsonl
+*.summary.json
+*.compact.csv
+*.npz
+logs/
+prompt_and_analysis_dimensions.md
+
+# Archives
+*.zip
+*.tar.gz
+
+# OS
+.DS_Store
+Thumbs.db
