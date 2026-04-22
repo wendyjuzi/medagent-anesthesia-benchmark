@@ -8,6 +8,10 @@ from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import requests
+try:
+    import yaml
+except Exception:  # noqa: BLE001
+    yaml = None
 
 from anes_pipeline import (
     SYSTEM_PROMPT,
@@ -23,6 +27,10 @@ from anes_pipeline import (
     evaluate_vitaldb_vs_miller,
     retrieve_miller_context,
 )
+
+RULES_DIR = Path(__file__).resolve().parent / "rules"
+MILLER_SUPPORT_RULES_PATH = RULES_DIR / "miller_support_rules.yaml"
+_SUPPORT_RULES_CACHE: Optional[Dict[str, Any]] = None
 
 
 def _load_records(path: str) -> List[Dict[str, Any]]:
@@ -552,6 +560,29 @@ def _has_required_sections(text: str) -> bool:
     return all(tag in value for tag in required)
 
 
+def _has_required_sections_strict_v2(text: str) -> bool:
+    value = str(text or "").strip()
+    if not value:
+        return False
+    required = ["【临床推理】", "【决策干预（Miller）】", "【决策干预（VitalDB）】"]
+    if not all(tag in value for tag in required):
+        return False
+    lines = [line.strip() for line in value.splitlines() if line.strip()]
+    if len(lines) != 4:
+        return False
+    if not lines[0].startswith("Q:"):
+        return False
+    if not lines[1].startswith("A:"):
+        return False
+    if not lines[2].startswith("【决策干预（Miller）】"):
+        return False
+    if not lines[3].startswith("【决策干预（VitalDB）】"):
+        return False
+    miller_line = lines[2]
+    has_locator = bool(re.search(r"(?i)m10\s*#\d+", miller_line)) or ("章节:" in miller_line and "段落:" in miller_line)
+    return has_locator
+
+
 def _normalize_text(value: str) -> str:
     return str(value or "").strip().lower().replace("\r", "\n")
 
@@ -560,13 +591,143 @@ def _contains_any(text: str, keywords: List[str]) -> bool:
     return any(k in text for k in keywords)
 
 
-def _concept_support_eval(miller_output: str, evidence_text: str) -> Dict[str, Any]:
+def _default_support_rules() -> Dict[str, Any]:
+    return {
+        "concepts": {
+            "perfusion_first": {
+                "out": ["灌注优先", "先稳灌注", "先纠正低血压", "perfusion first", "stabilize perfusion"],
+                "ev": ["hypotension", "perfusion", "blood pressure", "hemodynamic", "vasopressor"],
+            },
+            "avoid_deepen_when_hypotension": {
+                "out": ["避免加深", "不宜加深", "不要加深", "avoid deepening", "do not deepen"],
+                "ev": ["hypotension", "map", "anesthetic depth", "depth of anesthesia", "hemodynamic"],
+            },
+            "bis_with_context": {
+                "out": ["bis", "结合刺激", "不是单独触发", "not standalone trigger"],
+                "ev": ["bis", "eeg", "stimulation", "artifact", "awareness"],
+            },
+            "opioid_titration": {
+                "out": ["阿片", "瑞芬太尼", "opioid", "remifentanil", "analgesia"],
+                "ev": ["opioid", "fentanyl", "remifentanil", "noxious stimulation"],
+            },
+            "vasopressor_logic": {
+                "out": ["去氧肾上腺素", "麻黄碱", "去甲肾上腺素", "phenylephrine", "ephedrine", "norepinephrine"],
+                "ev": ["phenylephrine", "ephedrine", "norepinephrine", "vasopressor", "hypotension"],
+            },
+        },
+        "anchors": [
+            ["map", "平均动脉压", "灌注压"],
+            ["bis", "脑电", "麻醉深度"],
+            ["hypotension", "低血压"],
+            ["perfusion", "灌注"],
+            ["opioid", "阿片", "瑞芬太尼", "remifentanil"],
+            ["vasopressor", "升压药", "去甲肾上腺素", "麻黄碱", "去氧肾上腺素"],
+        ],
+        "scoring": {
+            "no_output_score": -1,
+            "no_evidence_score": -1,
+            "no_claim_score": -1,
+            "unsupported_score": -2,
+            "weakly_supported_score": 1,
+            "partially_supported_score": 2,
+            "supported_strict_score": 3,
+            "strict_min_anchor_hits": 1,
+            "partial_ratio_threshold": 0.5,
+        },
+    }
+
+
+def _load_support_rules() -> Dict[str, Any]:
+    global _SUPPORT_RULES_CACHE  # noqa: PLW0603
+    if _SUPPORT_RULES_CACHE is not None:
+        return _SUPPORT_RULES_CACHE
+    rules = _default_support_rules()
+    try:
+        if MILLER_SUPPORT_RULES_PATH.exists() and yaml is not None:
+            loaded = yaml.safe_load(MILLER_SUPPORT_RULES_PATH.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                rules = loaded
+    except Exception:  # noqa: BLE001
+        pass
+    _SUPPORT_RULES_CACHE = rules
+    return rules
+
+
+def _semantic_support_by_judge(
+    concepts: List[str],
+    miller_output: str,
+    evidence_text: str,
+    cfg: Optional[Dict[str, Any]],
+) -> Set[str]:
+    if not concepts or not isinstance(cfg, dict) or not cfg.get("enabled"):
+        return set()
+    api_url = str(cfg.get("api_url") or "").strip()
+    model = str(cfg.get("model") or "").strip()
+    headers = cfg.get("headers") if isinstance(cfg.get("headers"), dict) else {}
+    max_tokens = int(cfg.get("max_tokens") or 300)
+    if not api_url or not model:
+        return set()
+
+    prompt = (
+        "You are a strict medical evidence judge.\n"
+        "Task: Determine which claimed concepts are semantically supported by evidence.\n"
+        "Return JSON only: {\"supported_concepts\": [..], \"reason\": \"...\"}\n"
+        f"Allowed concepts: {json.dumps(concepts, ensure_ascii=False)}\n"
+        "Rules:\n"
+        "- Use semantic equivalence, not exact keyword matching.\n"
+        "- If concept is unsupported or uncertain, do not include it.\n"
+        "- Do not invent new concept names.\n\n"
+        f"[Model claim text]\n{miller_output}\n\n"
+        f"[Evidence text]\n{evidence_text[:6000]}\n"
+    )
+    try:
+        raw = _post_chat(
+            api_url=api_url,
+            headers=headers,
+            model=model,
+            prompt=prompt,
+            max_tokens=max_tokens,
+            system_prompt="Return strict JSON only.",
+        )
+        obj = _extract_json_obj(raw)
+        items = obj.get("supported_concepts", [])
+        out: Set[str] = set()
+        if isinstance(items, list):
+            for item in items:
+                value = str(item).strip()
+                if value in concepts:
+                    out.add(value)
+        return out
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+def _concept_support_eval(
+    miller_output: str,
+    evidence_text: str,
+    semantic_judge_cfg: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    rules_cfg = _load_support_rules()
+    concept_rules = rules_cfg.get("concepts", {}) if isinstance(rules_cfg.get("concepts"), dict) else {}
+    anchors = rules_cfg.get("anchors", []) if isinstance(rules_cfg.get("anchors"), list) else []
+    scoring = rules_cfg.get("scoring", {}) if isinstance(rules_cfg.get("scoring"), dict) else {}
+
+    no_output_score = int(scoring.get("no_output_score", -1))
+    no_evidence_score = int(scoring.get("no_evidence_score", -1))
+    no_claim_score = int(scoring.get("no_claim_score", -1))
+    unsupported_score = int(scoring.get("unsupported_score", -2))
+    weak_score = int(scoring.get("weakly_supported_score", 1))
+    partial_score = int(scoring.get("partially_supported_score", 2))
+    strict_score = int(scoring.get("supported_strict_score", 3))
+    strict_min_anchor_hits = int(scoring.get("strict_min_anchor_hits", 1))
+    partial_ratio_threshold = float(scoring.get("partial_ratio_threshold", 0.5))
+
     out = _normalize_text(miller_output)
     ev = _normalize_text(evidence_text)
     if not out:
         return {
             "verdict": "no_miller_output",
-            "score": -1,
+            "score": no_output_score,
             "support_ratio": 0.0,
             "claimed_concepts": [],
             "supported_concepts": [],
@@ -575,71 +736,55 @@ def _concept_support_eval(miller_output: str, evidence_text: str) -> Dict[str, A
     if not ev:
         return {
             "verdict": "no_evidence",
-            "score": -1,
+            "score": no_evidence_score,
             "support_ratio": 0.0,
             "claimed_concepts": [],
             "supported_concepts": [],
             "anchor_hits": 0,
         }
 
-    rules: Dict[str, Dict[str, List[str]]] = {
-        "perfusion_first": {
-            "out": ["灌注优先", "先稳灌注", "先纠正低血压", "perfusion first", "stabilize perfusion"],
-            "ev": ["hypotension", "perfusion", "blood pressure", "hemodynamic", "vasopressor"],
-        },
-        "avoid_deepen_when_hypotension": {
-            "out": ["避免加深", "不宜加深", "不要加深", "avoid deepening", "do not deepen"],
-            "ev": ["hypotension", "map", "anesthetic depth", "depth of anesthesia", "hemodynamic"],
-        },
-        "bis_with_context": {
-            "out": ["bis", "结合刺激", "不是单独触发", "not standalone trigger"],
-            "ev": ["bis", "eeg", "stimulation", "artifact", "awareness"],
-        },
-        "opioid_titration": {
-            "out": ["阿片", "瑞芬太尼", "opioid", "remifentanil", "analgesia"],
-            "ev": ["opioid", "fentanyl", "remifentanil", "noxious stimulation"],
-        },
-        "vasopressor_logic": {
-            "out": ["去氧肾上腺素", "麻黄碱", "去甲肾上腺素", "phenylephrine", "ephedrine", "norepinephrine"],
-            "ev": ["phenylephrine", "ephedrine", "norepinephrine", "vasopressor", "hypotension"],
-        },
-    }
-
     claimed: Set[str] = set()
     supported: Set[str] = set()
-    for concept, cfg in rules.items():
-        if _contains_any(out, cfg["out"]):
+    for concept, cfg in concept_rules.items():
+        if not isinstance(cfg, dict):
+            continue
+        out_keywords = [str(x).strip().lower() for x in cfg.get("out", []) if str(x).strip()]
+        ev_keywords = [str(x).strip().lower() for x in cfg.get("ev", []) if str(x).strip()]
+        if _contains_any(out, out_keywords):
             claimed.add(concept)
-            if _contains_any(ev, cfg["ev"]):
+            if _contains_any(ev, ev_keywords):
                 supported.add(concept)
 
-    anchors = [
-        ["map", "平均动脉压", "灌注压"],
-        ["bis", "脑电", "麻醉深度"],
-        ["hypotension", "低血压"],
-        ["perfusion", "灌注"],
-        ["opioid", "阿片", "瑞芬太尼", "remifentanil"],
-        ["vasopressor", "升压药", "去甲肾上腺素", "麻黄碱", "去氧肾上腺素"],
-    ]
+    if claimed and semantic_judge_cfg and semantic_judge_cfg.get("enabled"):
+        unsupported_claims = sorted(list(claimed - supported))
+        semantic_supported = _semantic_support_by_judge(
+            unsupported_claims,
+            miller_output=miller_output,
+            evidence_text=evidence_text,
+            cfg=semantic_judge_cfg,
+        )
+        supported.update(semantic_supported)
+
     anchor_hits = 0
     for kws in anchors:
-        if _contains_any(out, kws) and _contains_any(ev, kws):
+        kw_list = [str(x).strip().lower() for x in kws if str(x).strip()]
+        if _contains_any(out, kw_list) and _contains_any(ev, kw_list):
             anchor_hits += 1
 
     if not claimed:
         verdict = "no_explicit_claim"
-        score = -1
+        score = no_claim_score
         ratio = 0.0
     else:
         ratio = len(supported) / max(1, len(claimed))
-        if ratio >= 1.0 and anchor_hits >= 1:
-            verdict, score = "supported_strict", 3
-        elif ratio >= 0.5:
-            verdict, score = "partially_supported", 2
+        if ratio >= 1.0 and anchor_hits >= strict_min_anchor_hits:
+            verdict, score = "supported_strict", strict_score
+        elif ratio >= partial_ratio_threshold:
+            verdict, score = "partially_supported", partial_score
         elif ratio > 0:
-            verdict, score = "weakly_supported", 1
+            verdict, score = "weakly_supported", weak_score
         else:
-            verdict, score = "unsupported", 0
+            verdict, score = "unsupported", unsupported_score
 
     return {
         "verdict": verdict,
@@ -648,6 +793,7 @@ def _concept_support_eval(miller_output: str, evidence_text: str) -> Dict[str, A
         "claimed_concepts": sorted(list(claimed)),
         "supported_concepts": sorted(list(supported)),
         "anchor_hits": anchor_hits,
+        "semantic_judge_used": bool(semantic_judge_cfg and semantic_judge_cfg.get("enabled")),
     }
 
 
@@ -732,21 +878,143 @@ def _repair_via_requests(
     kw_text = ", ".join(kws) if kws else "N/A"
 
     repair_sys = (
-        "You are a medical text formatter. "
+        "You are a strict medical QA formatter. "
         "Return only final QA in Chinese. "
-        "No thinking process, no bullets, no instruction echo."
+        "No thinking process, no bullets, no markdown, no instruction echo, no extra prefixes/suffixes."
     )
     repair_user = (
-        "Rewrite to strict format. Output only:\n"
-        "Q: ...\n"
-        "A: 【临床推理】：...\n"
-        "【决策干预（Miller）】：...\n"
-        "【决策干预（VitalDB）】：...\n\n"
+        "Rewrite to strict format. You MUST output EXACTLY this 4-line template:\n"
+        "Q: <一句问题>\n"
+        "A: 【临床推理】：<1-3句>\n"
+        "【决策干预（Miller）】：<1-3句>\n"
+        "【决策干预（VitalDB）】：<1-2句>\n\n"
         "Do not output Analyze/Strategy/Constraint Check/self-correction text.\n"
+        "Do not use markdown headings, bullets, code blocks, or JSON.\n"
+        "If information is insufficient, keep all sections and write a conservative sentence instead of omitting sections.\n"
         f"Golden logged_action: {actual}\n"
         f"Golden medication_key: {med_key}\n"
         f"Expected drug keywords in 【决策干预（VitalDB）】: {kw_text}\n"
         "【决策干预（VitalDB）】 must be same drug class/category as golden logged_action.\n"
+        "Source text:\n"
+        f"{raw_text}"
+    )
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": repair_sys},
+            {"role": "user", "content": repair_user},
+        ],
+        "max_tokens": max_tokens,
+        "temperature": 0.0,
+    }
+    try:
+        resp = requests.post(api_url, headers=headers, json=payload, timeout=300)
+        resp.raise_for_status()
+        obj = resp.json()
+        return str(obj["choices"][0]["message"]["content"]).strip()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _format_contract_block(snapshot: Dict[str, Any]) -> str:
+    hint = _golden_action_hint(snapshot)
+    kws = hint.get("keywords", [])
+    kw_text = ", ".join(str(k) for k in kws if str(k).strip()) if isinstance(kws, list) else ""
+    keyword_line = (
+        f"- In 【决策干预（VitalDB）】, prefer these action keywords when applicable: {kw_text}\n"
+        if kw_text
+        else ""
+    )
+    return (
+        "\n\n[Output Contract - Must Follow]\n"
+        "Output ONLY the final answer and NOTHING else.\n"
+        "Use EXACTLY the following 4-line template:\n"
+        "Q: <一句问题>\n"
+        "A: 【临床推理】：<1-3句>\n"
+        "【决策干预（Miller）】：<1-3句>\n"
+        "【决策干预（VitalDB）】：<1-2句>\n"
+        "Hard constraints:\n"
+        "- Keep the three section labels exactly as written.\n"
+        "- Do not omit brackets or colons.\n"
+        "- No markdown, bullets, JSON, XML, or extra commentary.\n"
+        + keyword_line
+    )
+
+
+def _format_contract_block_v2(snapshot: Dict[str, Any], retrieval: Optional[Dict[str, Any]]) -> str:
+    hint = _golden_action_hint(snapshot)
+    kws = hint.get("keywords", [])
+    kw_text = ", ".join(str(k) for k in kws if str(k).strip()) if isinstance(kws, list) else ""
+    keyword_line = (
+        f"- In 【决策干预（VitalDB）】 prefer these action keywords when applicable: {kw_text}\n"
+        if kw_text
+        else ""
+    )
+    locator_lines: List[str] = []
+    if isinstance(retrieval, dict):
+        results = retrieval.get("results", [])
+        if isinstance(results, list):
+            for item in results[:3]:
+                if not isinstance(item, dict):
+                    continue
+                rank = item.get("rank", "?")
+                chapter = str(item.get("chapter") or "").strip() or "未知"
+                paragraph = str(item.get("paragraph") or "").strip() or str(item.get("chunk_id") or "未知")
+                section = str(item.get("section") or "").strip()
+                section_piece = f"; 小节:{section}" if section else ""
+                locator_lines.append(f"[M10#{rank}|章节:{chapter}{section_piece}; 段落:{paragraph}]")
+    locator_hint = ""
+    if locator_lines:
+        locator_hint = "Evidence locators (must cite at least one in Miller line): " + " ".join(locator_lines) + "\n"
+    return (
+        "\n\n[Output Contract - Must Follow]\n"
+        "Output ONLY the final answer and NOTHING else.\n"
+        "Use EXACTLY the following 4-line template:\n"
+        "Q: <一句问题>\n"
+        "A: 【临床推理】：<1-3句>\n"
+        "【决策干预（Miller）】：<1-3句，且必须包含证据定位如[M10#1|章节:...; 段落:...]>\n"
+        "【决策干预（VitalDB）】：<1-2句>\n"
+        "Hard constraints:\n"
+        "- Keep the three section labels exactly as written.\n"
+        "- Do not omit brackets or colons.\n"
+        "- No markdown, bullets, JSON, XML, or extra commentary.\n"
+        "- Miller line must include at least one evidence locator token M10#N.\n"
+        + keyword_line
+        + locator_hint
+    )
+
+
+def _repair_via_requests_v2(
+    api_url: str,
+    headers: Dict[str, str],
+    model: str,
+    raw_text: str,
+    snapshot: Dict[str, Any],
+    max_tokens: int,
+) -> Optional[str]:
+    hint = _golden_action_hint(snapshot)
+    med_key = hint.get("medication_key", "")
+    actual = hint.get("actual_intervention", "")
+    kws = hint.get("keywords", [])
+    kw_text = ", ".join(kws) if kws else "N/A"
+    repair_sys = (
+        "You are a strict medical QA formatter. "
+        "Return only final QA in Chinese. "
+        "No thinking process, no bullets, no markdown, no instruction echo, no extra prefixes/suffixes."
+    )
+    repair_user = (
+        "Rewrite to strict format. You MUST output EXACTLY this 4-line template:\n"
+        "Q: <一句问题>\n"
+        "A: 【临床推理】：<1-3句>\n"
+        "【决策干预（Miller）】：<1-3句，且必须包含证据定位标签如[M10#1|章节:...; 段落:...]>\n"
+        "【决策干预（VitalDB）】：<1-2句>\n\n"
+        "Do not output Analyze/Strategy/Constraint Check/self-correction text.\n"
+        "Do not use markdown headings, bullets, code blocks, or JSON.\n"
+        "Miller line must include at least one M10 locator token.\n"
+        f"Golden logged_action: {actual}\n"
+        f"Golden medication_key: {med_key}\n"
+        f"Expected drug keywords in 【决策干预（VitalDB）】: {kw_text}\n"
+        "【决策干预（VitalDB）】must be same drug class/category as golden logged_action.\n"
         "Source text:\n"
         f"{raw_text}"
     )
@@ -800,21 +1068,25 @@ def _run_generation(
     force_miller10_min_hits: int = 1,
     strict_format_gate: bool = False,
     strict_evidence_gate: bool = False,
+    semantic_judge_cfg: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     prompt = build_user_prompt(snapshot, retrieval=retrieval)
     prompt += _format_web_context_block(web_search)
+    prompt += _format_contract_block_v2(snapshot, retrieval if isinstance(retrieval, dict) else evaluation_retrieval)
     if strict_format_gate:
         strict_system_prompt = (
             SYSTEM_PROMPT
+            + "\nYou are under STRICT formatting mode."
             + "\nYour output MUST strictly contain the three sections: "
-            + "【临床推理】, 【决策干预（Miller）】, and 【决策干预（VitalDB）】. "
-            + "Do not omit the brackets or colons."
+            + "【临床推理】, 【决策干预（Miller）】, and 【决策干预（VitalDB）】."
+            + "\nOutput ONLY one QA pair, with exact labels and colons, and no extra text."
         )
     else:
         strict_system_prompt = (
             SYSTEM_PROMPT
             + "\nPrefer using these section labels in the final answer: "
             + "【临床推理】, 【决策干预（Miller）】, and 【决策干预（VitalDB）】."
+            + "\nOutput only one final QA pair. Avoid extra preface or postscript."
         )
     if "search" in str(model).lower():
         prompt += (
@@ -861,15 +1133,15 @@ def _run_generation(
     cleaned = _extract_qa_block(raw)
     loose_fallback = cleaned if str(cleaned or "").strip() else str(raw or "").strip()
     if strict_format_gate:
-        final = cleaned if (_is_strict_qa(cleaned) and _is_action_aligned(cleaned, snapshot) and _has_required_sections(cleaned)) else None
+        final = cleaned if (_is_strict_qa(cleaned) and _is_action_aligned(cleaned, snapshot) and _has_required_sections_strict_v2(cleaned)) else None
     else:
-        final = cleaned if (_has_required_sections(cleaned)) else None
+        final = cleaned if (_has_required_sections_strict_v2(cleaned)) else None
     parse_mode = "strict_pass" if final else "strict_fail"
     if not final:
-        repaired = _repair_via_requests(api_url, headers, model, raw, snapshot, max_tokens)
+        repaired = _repair_via_requests_v2(api_url, headers, model, raw, snapshot, max_tokens)
         if repaired:
             repaired_cleaned = _extract_qa_block(repaired)
-            if repaired_cleaned and _has_required_sections(repaired_cleaned):
+            if repaired_cleaned and _has_required_sections_strict_v2(repaired_cleaned):
                 final = repaired_cleaned
                 parse_mode = "repair_pass"
     if not final and loose_fallback:
@@ -882,6 +1154,7 @@ def _run_generation(
     support_eval = _concept_support_eval(
         str(validity["miller_output"]),
         _build_evidence_text(evaluation_retrieval if isinstance(evaluation_retrieval, dict) else retrieval),
+        semantic_judge_cfg=semantic_judge_cfg,
     )
     return {
         "error": None,
@@ -1044,6 +1317,20 @@ def main() -> None:
         help="Enable strict Miller10 evidence gate. Default is relaxed.",
     )
     parser.add_argument(
+        "--enable-semantic-judge",
+        action="store_true",
+        help="Enable LLM semantic judge to recover synonym/equivalence misses in support scoring.",
+    )
+    parser.add_argument(
+        "--judge-api-url",
+        default="",
+        help="Semantic judge API URL. If empty and enabled, reuse --direct-api-url.",
+    )
+    parser.add_argument("--judge-api-key", default="")
+    parser.add_argument("--judge-api-key-env", default="GPT_API_KEY")
+    parser.add_argument("--judge-model", default="gpt-4o-mini")
+    parser.add_argument("--judge-max-tokens", type=int, default=300)
+    parser.add_argument(
         "--force-direct-miller10-search",
         action="store_true",
         help="Force direct search model to retrieve Miller's Anesthesia 10th evidence before generation.",
@@ -1143,6 +1430,24 @@ def main() -> None:
             )
         gpt_search_headers = _build_headers(gpt_search_key)
 
+    semantic_judge_cfg: Dict[str, Any] = {"enabled": False}
+    if args.enable_semantic_judge:
+        judge_api_url = (args.judge_api_url or args.direct_api_url).strip()
+        judge_api_key = _resolve_api_key_for_url(
+            judge_api_url,
+            args.judge_api_key,
+            args.judge_api_key_env,
+        )
+        if not judge_api_key:
+            raise ValueError("Missing semantic judge API key. Pass --judge-api-key or set --judge-api-key-env.")
+        semantic_judge_cfg = {
+            "enabled": True,
+            "api_url": judge_api_url,
+            "headers": _build_headers(judge_api_key),
+            "model": args.judge_model,
+            "max_tokens": max(128, int(args.judge_max_tokens)),
+        }
+
     records = _load_records(args.input)
     if args.limit > 0:
         records = records[: args.limit]
@@ -1222,6 +1527,7 @@ def main() -> None:
                 force_miller10_for_search_model=False,
                 strict_format_gate=bool(args.strict_format_gate),
                 strict_evidence_gate=bool(args.strict_evidence_gate),
+                semantic_judge_cfg=semantic_judge_cfg,
             )
             direct_out = _run_generation(
                 snapshot,
@@ -1237,6 +1543,7 @@ def main() -> None:
                 force_miller10_min_hits=max(1, int(args.direct_miller10_min_hits)),
                 strict_format_gate=bool(args.strict_format_gate),
                 strict_evidence_gate=bool(args.strict_evidence_gate),
+                semantic_judge_cfg=semantic_judge_cfg,
             )
             comparison = _compare_modes(rag_out, direct_out)
 

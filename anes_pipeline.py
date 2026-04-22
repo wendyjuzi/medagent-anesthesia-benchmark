@@ -1,5 +1,7 @@
 ﻿import argparse
 from collections import Counter
+from contextlib import nullcontext
+import csv
 import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -8,6 +10,7 @@ import os
 import random
 import re
 import shutil
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -35,6 +38,11 @@ try:
     from sentence_transformers import SentenceTransformer
 except Exception:
     SentenceTransformer = None
+
+try:
+    import yaml
+except Exception:
+    yaml = None
 
 
 # ------------------------------------------
@@ -304,6 +312,225 @@ ANES_THRESHOLDS = {
     "slow_trend_window_sec": 120.0,
 }
 
+RULES_DIR = Path(__file__).resolve().parent / "rules"
+CLINICAL_CONFLICT_RULES_PATH = RULES_DIR / "clinical_conflict_rules.yaml"
+_CLINICAL_RULES_CACHE: Optional[Dict[str, Any]] = None
+
+
+def _default_clinical_conflict_rules() -> Dict[str, Any]:
+    return {
+        "classes_worsen_perfusion": [
+            "hypnotic_iv",
+            "hypnotic_volatile",
+            "anti_sympathetic",
+            "vasodilator",
+            "inodilator",
+        ],
+        "conflict_rules": [
+            {
+                "id": "oxygenation_worsen_perfusion",
+                "all": ["strategy_oxygenation_first", "action_escalation", "class_worsen_perfusion"],
+                "reason": "低氧场景下优先氧合，但VitalDB策略偏向加深麻醉或降压。",
+                "high_risk": True,
+            },
+            {
+                "id": "perfusion_worsen_perfusion",
+                "all": ["strategy_perfusion_first", "action_escalation", "class_worsen_perfusion"],
+                "reason": "低灌注场景下应先稳灌注，VitalDB策略可能进一步压低血压。",
+                "high_risk": True,
+            },
+            {
+                "id": "map_low_escalate_hypnotic_or_vasodilator",
+                "all": ["map_low", "action_escalation", "class_hypnotic_or_vasodilator_inodilator"],
+                "reason": "MAP<65时继续升级催眠/吸入麻醉或扩血管药，方向上不符合灌注优先。",
+                "high_risk": True,
+            },
+            {
+                "id": "bis_high_and_low_map_hypnotic_escalation",
+                "all": ["map_below_75", "bis_high", "class_hypnotic", "action_escalation"],
+                "reason": "BIS高但MAP已接近/低于灌注安全边界时，单纯加深催眠药风险偏高。",
+                "high_risk": True,
+            },
+            {
+                "id": "reduce_depth_but_hypnotic_escalation",
+                "all": ["strategy_reduce_depth", "class_hypnotic", "action_escalation"],
+                "reason": "BIS低+低灌注时应减浅麻醉，但VitalDB记录为加深麻醉。",
+                "high_risk": True,
+            },
+            {
+                "id": "phenylephrine_in_bradycardia",
+                "all": ["action_escalation", "drug_phenylephrine", "hr_lt_50"],
+                "reason": "去氧肾上腺素在严重心动过缓时可诱发反射性进一步降心率，应避免。",
+                "high_risk": True,
+            },
+            {
+                "id": "ephedrine_in_tachycardia",
+                "all": ["action_escalation", "drug_ephedrine", "hr_gt_100"],
+                "reason": "麻黄碱在心动过速状态下会进一步推高心率，存在心肌缺血/室性心律失常风险。",
+                "high_risk": True,
+            },
+            {
+                "id": "epinephrine_non_rescue",
+                "all": ["action_escalation", "drug_epinephrine", "map_not_lt_55"],
+                "reason": "肾上腺素不宜作为非抢救性常规升压手段。",
+                "high_risk": False,
+            },
+            {
+                "id": "nitroglycerin_when_map_low",
+                "all": ["action_escalation", "drug_nitroglycerin", "map_low"],
+                "reason": "MAP<65时升级硝酸甘油可导致回心血量骤降并加重循环崩溃风险。",
+                "high_risk": True,
+            },
+            {
+                "id": "milrinone_when_map_low",
+                "all": ["action_escalation", "drug_milrinone", "map_low"],
+                "reason": "低血压未纠正前升级米力农可能因扩血管效应导致血压进一步下降。",
+                "high_risk": True,
+            },
+            {
+                "id": "atropine_when_tachycardia",
+                "all": ["action_escalation", "drug_atropine", "hr_gt_100"],
+                "reason": "阿托品在已心动过速时不合适，可能进一步加重心率失控。",
+                "high_risk": False,
+            },
+            {
+                "id": "propofol_in_severe_hypotension",
+                "all": ["action_escalation", "drug_propofol", "severe_hypotension"],
+                "reason": "重度低灌注状态下继续加深丙泊酚可能显著恶化循环。",
+                "high_risk": True,
+            },
+            {
+                "id": "remifentanil_brady_hypotension",
+                "all": ["action_escalation", "drug_remifentanil", "map_low", "hr_lt_50"],
+                "reason": "不明原因心动过缓合并低血压时升级瑞芬太尼可加重缓慢性循环抑制。",
+                "high_risk": True,
+            },
+            {
+                "id": "remifentanil_in_severe_hypotension",
+                "all": ["action_escalation", "drug_remifentanil", "map_lt_55"],
+                "reason": "重度低血压时升级瑞芬太尼可能进一步抑制交感反应，应先纠正灌注。",
+                "high_risk": True,
+            },
+            {
+                "id": "norepinephrine_without_volume_optimization",
+                "all": ["action_escalation", "drug_norepinephrine", "severe_hypotension", "hr_gt_110", "map_drop_ge_relative"],
+                "reason": "疑似低容量未纠正时直接强化去甲升压，可能增加微循环灌注不足风险。",
+                "high_risk": True,
+            },
+        ],
+        "alignment_rules": [
+            {
+                "id": "vasopressor_when_perfusion_first",
+                "all": ["class_vasopressor_or_inopressor", "strategy_perfusion_first"],
+                "outcome": "aligned",
+                "reason": "action_class_matches_miller_priority",
+            },
+            {
+                "id": "vasopressor_when_map_low_partial",
+                "all": ["class_vasopressor_or_inopressor", "map_low"],
+                "not": ["strategy_perfusion_first"],
+                "outcome": "partial",
+                "reason": "MAP已低但尚未达到持续/重度低灌注规则，升压方向部分合理。",
+            },
+            {
+                "id": "opioid_or_hypnotic_when_bis_high",
+                "all": ["class_opioid_or_hypnotic", "strategy_consider_depth_or_analgesia_increase"],
+                "outcome": "aligned",
+                "reason": "action_class_matches_miller_priority",
+            },
+            {
+                "id": "opioid_or_hypnotic_with_low_map_caution",
+                "all": ["class_opioid_or_hypnotic", "strategy_consider_depth_or_analgesia_increase", "map_below_75"],
+                "outcome": "partial",
+                "reason": "BIS升高支持加深镇静/镇痛，但MAP接近灌注下限，需小步滴定和复评。",
+            },
+            {
+                "id": "decrease_hypnotic_when_reduce_depth",
+                "all": ["class_hypnotic", "strategy_reduce_depth", "delta_negative"],
+                "outcome": "aligned",
+                "reason": "action_class_matches_miller_priority",
+            },
+            {
+                "id": "monitoring_in_low_signal_context",
+                "all": ["strategy_context_monitoring", "class_monitoring_compatible"],
+                "outcome": "aligned",
+                "reason": "action_class_matches_miller_priority",
+            },
+            {
+                "id": "phenylephrine_with_severe_hypotension_hr_not_low",
+                "all": ["drug_phenylephrine", "severe_hypotension", "hr_not_low"],
+                "outcome": "aligned",
+                "reason": "action_class_matches_miller_priority",
+            },
+            {
+                "id": "ephedrine_with_low_hr_hypotension",
+                "all": ["drug_ephedrine", "severe_hypotension", "hr_lt_60", "hr_le_100"],
+                "outcome": "aligned",
+                "reason": "action_class_matches_miller_priority",
+            },
+            {
+                "id": "norepinephrine_with_severe_hypotension",
+                "all": ["drug_norepinephrine", "severe_hypotension"],
+                "outcome": "aligned",
+                "reason": "action_class_matches_miller_priority",
+            },
+            {
+                "id": "epinephrine_rescue_range",
+                "all": ["drug_epinephrine", "map_lt_55"],
+                "outcome": "aligned",
+                "reason": "action_class_matches_miller_priority",
+            },
+            {
+                "id": "atropine_with_critical_brady",
+                "all": ["drug_atropine", "severe_hypotension", "hr_lt_45"],
+                "outcome": "aligned",
+                "reason": "action_class_matches_miller_priority",
+            },
+            {
+                "id": "vasodilator_or_inodilator_when_map_65_75",
+                "all": ["drug_vasodilator_or_inodilator", "map_ge_65", "map_below_75"],
+                "outcome": "partial",
+                "reason": "MAP虽未低于65，但扩血管/正性肌力药仍需严密复评灌注。",
+            },
+            {
+                "id": "vasodilator_or_inodilator_when_map_ge_75",
+                "all": ["drug_vasodilator_or_inodilator", "map_ge_75"],
+                "outcome": "aligned",
+                "reason": "action_class_matches_miller_priority",
+            },
+        ],
+    }
+
+
+def _load_clinical_conflict_rules() -> Dict[str, Any]:
+    global _CLINICAL_RULES_CACHE  # noqa: PLW0603
+    if _CLINICAL_RULES_CACHE is not None:
+        return _CLINICAL_RULES_CACHE
+
+    rules = _default_clinical_conflict_rules()
+    try:
+        if CLINICAL_CONFLICT_RULES_PATH.exists() and yaml is not None:
+            loaded = yaml.safe_load(CLINICAL_CONFLICT_RULES_PATH.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                rules = loaded
+    except Exception:
+        pass
+
+    _CLINICAL_RULES_CACHE = rules
+    return rules
+
+
+def _rule_matches_facts(rule: Dict[str, Any], facts: Dict[str, bool]) -> bool:
+    all_facts = rule.get("all", []) if isinstance(rule.get("all"), list) else []
+    not_facts = rule.get("not", []) if isinstance(rule.get("not"), list) else []
+    for key in all_facts:
+        if not bool(facts.get(str(key), False)):
+            return False
+    for key in not_facts:
+        if bool(facts.get(str(key), False)):
+            return False
+    return True
+
 DRUG_REFERENCE = {
     "Phenylephrine": {
         "common_scenario": "Hypotension with normal/high HR",
@@ -517,6 +744,9 @@ class PipelineConfig:
     dataset_jsonl: str
     snapshot_json: str
     llm_jsonl: str
+    miller_retrieval_log_jsonl: str
+    miller_retrieval_log_csv: str
+    miller_retrieval_log_max_chars: int
     signal_interval_sec: float
     med_check_interval_sec: float
     window_sec: int
@@ -567,6 +797,10 @@ class PipelineConfig:
     miller_chunk_chars: int
     miller_chunk_overlap_chars: int
     miller_max_passage_chars: int
+    miller_bis_intent_mode: str
+    miller_depth_focus_weight: float
+    miller_require_chapter: bool
+    miller_allowed_chapters: str
     embedding_backend: str
     embedding_model: str
     embedding_device: str
@@ -695,6 +929,88 @@ def _coerce_text(value: Any) -> str:
     return str(value).strip()
 
 
+def _pick_first_nonempty(row: Dict[str, Any], keys: Sequence[str]) -> str:
+    for key in keys:
+        value = _coerce_text(row.get(key))
+        if value:
+            return value
+    return ""
+
+
+def _infer_chapter_from_text(text: str) -> Tuple[str, str]:
+    src = _coerce_text(text)
+    if not src:
+        return "", ""
+    head = " ".join(src.strip().split())[:220]
+    patterns = [
+        r"^\s*(\d{1,3})\s*[•·\-\–]\s*([A-Za-z][A-Za-z0-9 ,:&()/\-]{3,120})",
+        r"(?i)\bchapter\s+(\d{1,3})\s*[:\-–]?\s*([A-Za-z][A-Za-z0-9 ,:&()/\-]{3,120})",
+    ]
+    for pat in patterns:
+        m = re.search(pat, head)
+        if not m:
+            continue
+        num = _coerce_text(m.group(1))
+        title = _coerce_text(m.group(2))
+        title = re.sub(r"\s+", " ", title).strip(" .;,-")
+        if num:
+            return num, title
+    return "", ""
+
+
+def _miller_locator_parts(item: Dict[str, Any]) -> Dict[str, Any]:
+    chapter = _pick_first_nonempty(item, ["chapter", "chapter_title", "chapter_name", "chapter_id"])
+    section = _pick_first_nonempty(item, ["section", "section_title", "section_name"])
+    subsection = _pick_first_nonempty(item, ["subsection", "subsection_title", "subsection_name"])
+    paragraph = _pick_first_nonempty(item, ["paragraph", "paragraph_id", "para_id", "paragraph_index"])
+    page = _pick_first_nonempty(item, ["page", "page_no", "page_index"])
+    line_no = _pick_first_nonempty(item, ["line_no"])
+    chunk_id = _pick_first_nonempty(item, ["chunk_id"])
+    page_chunk_index = _pick_first_nonempty(item, ["page_chunk_index"])
+    if not chapter:
+        inferred_chapter, inferred_title = _infer_chapter_from_text(item.get("text"))
+        if inferred_chapter:
+            chapter = inferred_chapter
+        if inferred_title and not section:
+            section = inferred_title
+    if not paragraph:
+        if page_chunk_index:
+            paragraph = f"p{page or '?'}_chunk{page_chunk_index}"
+        elif chunk_id:
+            paragraph = str(chunk_id)
+    return {
+        "chapter": chapter,
+        "section": section,
+        "subsection": subsection,
+        "paragraph": paragraph,
+        "page": page,
+        "line_no": line_no,
+        "chunk_id": chunk_id,
+    }
+
+
+def _format_miller_locator(item: Dict[str, Any], rank: Any = None) -> str:
+    parts = _miller_locator_parts(item)
+    rank_text = str(rank if rank is not None else item.get("rank", "?")).strip() or "?"
+    loc_tokens = []
+    if parts["chapter"]:
+        loc_tokens.append(f"章节:{parts['chapter']}")
+    if parts["section"]:
+        loc_tokens.append(f"小节:{parts['section']}")
+    if parts["subsection"]:
+        loc_tokens.append(f"子节:{parts['subsection']}")
+    if parts["paragraph"]:
+        loc_tokens.append(f"段落:{parts['paragraph']}")
+    if parts["page"]:
+        loc_tokens.append(f"页:{parts['page']}")
+    if parts["line_no"]:
+        loc_tokens.append(f"行:{parts['line_no']}")
+    if parts["chunk_id"]:
+        loc_tokens.append(f"chunk:{parts['chunk_id']}")
+    loc_body = "; ".join(loc_tokens) if loc_tokens else "章节:未知; 段落:未知"
+    return f"[M10#{rank_text}|{loc_body}]"
+
+
 def _tokenize_for_bm25(text: str) -> List[str]:
     src = _coerce_text(text).lower()
     if not src:
@@ -768,14 +1084,34 @@ def _load_miller_corpus_chunks(cfg: PipelineConfig) -> List[Dict[str, Any]]:
                 if not text:
                     continue
                 source = _coerce_text(row.get("source")) or _coerce_text(row.get("title")) or os.path.basename(corpus_path)
-                chunks.append(
-                    {
-                        "text": text,
-                        "source": source,
-                        "chunk_id": len(chunks),
-                        "line_no": line_no,
-                    }
-                )
+                chunk: Dict[str, Any] = {
+                    "text": text,
+                    "source": source,
+                    "chunk_id": len(chunks),
+                    "line_no": line_no,
+                }
+                for src_key, dst_key in (
+                    ("chapter", "chapter"),
+                    ("chapter_title", "chapter"),
+                    ("chapter_name", "chapter"),
+                    ("section", "section"),
+                    ("section_title", "section"),
+                    ("section_name", "section"),
+                    ("subsection", "subsection"),
+                    ("subsection_title", "subsection"),
+                    ("subsection_name", "subsection"),
+                    ("paragraph", "paragraph"),
+                    ("paragraph_id", "paragraph"),
+                    ("para_id", "paragraph"),
+                    ("paragraph_index", "paragraph"),
+                    ("page", "page"),
+                    ("page_no", "page"),
+                    ("page_index", "page"),
+                ):
+                    value = _coerce_text(row.get(src_key))
+                    if value and not _coerce_text(chunk.get(dst_key)):
+                        chunk[dst_key] = value
+                chunks.append(chunk)
         return chunks
 
     if ext == ".pdf":
@@ -918,7 +1254,7 @@ def _make_miller_retriever(passages: List[Dict[str, Any]], embeddings: np.ndarra
     )
 
 
-def build_miller_retriever(client: Any, cfg: PipelineConfig) -> MillerRetriever:
+def build_miller_retriever(client: Optional[Any], cfg: PipelineConfig) -> MillerRetriever:
     if not cfg.enable_miller_rag:
         return _make_miller_retriever(passages=[], embeddings=np.zeros((0, 0), dtype=np.float32))
     if not cfg.miller_corpus_path.strip():
@@ -939,6 +1275,12 @@ def build_miller_retriever(client: Any, cfg: PipelineConfig) -> MillerRetriever:
                 return _make_miller_retriever(passages=passages, embeddings=embeddings)
         except Exception:
             pass
+
+    if client is None:
+        raise RuntimeError(
+            "Miller index cache is missing or stale, and embedding client is unavailable. "
+            "Provide a valid --miller-index-path cache or an embedding backend/model that can run now."
+        )
 
     passages = _load_miller_corpus_chunks(cfg)
     if not passages:
@@ -1075,7 +1417,7 @@ def _append_intent(intents: List[str], text: str) -> None:
         intents.append(item)
 
 
-def build_miller_intent_tags(snapshot: Dict[str, Any]) -> List[str]:
+def build_miller_intent_tags(snapshot: Dict[str, Any], cfg: Optional[Any] = None) -> List[str]:
     patient = snapshot.get("patient_background", {}) if isinstance(snapshot.get("patient_background"), dict) else {}
     assess = snapshot.get("clinical_assessment", {}) if isinstance(snapshot.get("clinical_assessment"), dict) else {}
     recent = assess.get("recent_state_mean", {}) if isinstance(assess, dict) else {}
@@ -1093,6 +1435,12 @@ def build_miller_intent_tags(snapshot: Dict[str, Any]) -> List[str]:
     surgery_group = _coerce_text(patient.get("surgery_group"))
     surgery = _coerce_text(snapshot.get("surgery_type"))
     med_key = _coerce_text(anchor.get("medication_key"))
+
+    bis_mode = str(getattr(cfg, "miller_bis_intent_mode", "paired_only") or "paired_only").strip().lower()
+    if bis_mode not in {"full", "paired_only", "off"}:
+        bis_mode = "paired_only"
+    allow_isolated_bis = bis_mode == "full"
+    allow_paired_bis = bis_mode in {"full", "paired_only"}
 
     intents: List[str] = []
     if surgery_group:
@@ -1122,18 +1470,19 @@ def build_miller_intent_tags(snapshot: Dict[str, Any]) -> List[str]:
         _append_intent(intents, "intraoperative tachycardia")
     elif hr_now is not None and hr_now < 50.0:
         _append_intent(intents, "intraoperative bradycardia")
-    if bis_now is not None and bis_now > 60.0:
-        _append_intent(intents, "high BIS during general anesthesia")
-    elif bis_now is not None and bis_now < 40.0:
-        _append_intent(intents, "low BIS during general anesthesia")
+    if allow_isolated_bis:
+        if bis_now is not None and bis_now > 60.0:
+            _append_intent(intents, "high BIS during general anesthesia")
+        elif bis_now is not None and bis_now < 40.0:
+            _append_intent(intents, "low BIS during general anesthesia")
 
-    if map_now is not None and map_now < 65.0 and bis_now is not None and bis_now > 60.0:
+    if allow_paired_bis and map_now is not None and map_now < 65.0 and bis_now is not None and bis_now > 60.0:
         _append_intent(intents, "high BIS with hypotension")
         _append_intent(intents, "do not deepen anesthesia before stabilizing perfusion")
-    if map_now is not None and map_now < 65.0 and bis_now is not None and bis_now < 40.0:
+    if allow_paired_bis and map_now is not None and map_now < 65.0 and bis_now is not None and bis_now < 40.0:
         _append_intent(intents, "excessive anesthetic depth with hypoperfusion")
         _append_intent(intents, "reduce anesthetic depth and support circulation")
-    if bis_now is not None and bis_now > 60.0 and hr_now is not None and hr_now > 100.0:
+    if allow_paired_bis and bis_now is not None and bis_now > 60.0 and hr_now is not None and hr_now > 100.0:
         _append_intent(intents, "inadequate analgesia versus inadequate anesthetic depth")
     if med_key in {"REMI_VOL", "REMI_RATE", "RFTN20_VOL", "RFTN50_VOL", "RFTN20_RATE", "RFTN50_RATE"}:
         _append_intent(intents, "opioid titration during general anesthesia")
@@ -1144,38 +1493,55 @@ def build_miller_intent_tags(snapshot: Dict[str, Any]) -> List[str]:
     if med_key in {"PHE_RATE", "EPH_VOL", "EPH_RATE", "NOR_RATE", "EPI_RATE"}:
         _append_intent(intents, "vasopressor choice during intraoperative hypotension")
 
+    def _allow_bis_hint(hint: str) -> bool:
+        low = str(hint or "").lower()
+        if "bis" not in low:
+            return True
+        if bis_mode == "off":
+            return False
+        if bis_mode == "full":
+            return True
+        paired_terms = ("map", "hypotension", "perfusion", "hr", "tachycardia", "bradycardia", "spo2", "oxygen")
+        return any(term in low for term in paired_terms)
+
     if isinstance(flags, list):
         for flag in flags[:3]:
-            _append_intent(intents, _translate_miller_hint(str(flag)).lower())
+            translated = _translate_miller_hint(str(flag)).lower()
+            if _allow_bis_hint(translated):
+                _append_intent(intents, translated)
     if isinstance(contextual, list):
         for item in contextual[:2]:
-            _append_intent(intents, _translate_miller_hint(str(item)).lower())
+            translated = _translate_miller_hint(str(item)).lower()
+            if _allow_bis_hint(translated):
+                _append_intent(intents, translated)
 
     return intents[:8]
 
 
-def rewrite_miller_query(snapshot: Dict[str, Any]) -> Tuple[List[str], str]:
-    intents = build_miller_intent_tags(snapshot)
+def rewrite_miller_query(snapshot: Dict[str, Any], cfg: Optional[Any] = None) -> Tuple[List[str], str]:
+    intents = build_miller_intent_tags(snapshot, cfg=cfg)
     if not intents:
         return [], "intraoperative anesthesia management; anesthetic depth; hemodynamic stability"
     return intents, "; ".join(intents)
 
 
-def _clinical_focus_score(text: str, intent_tags: Sequence[str]) -> float:
+def _clinical_focus_score(text: str, intent_tags: Sequence[str], cfg: Optional[Any] = None) -> float:
     low = _coerce_text(text).lower()
     if not low:
         return 0.0
     score = 0.0
-    focus_groups = {
-        "hemodynamics": ("hypotension", "blood pressure", "arterial pressure", "map", "perfusion", "vasopressor"),
-        "depth": ("bis", "depth of anesthesia", "anesthetic depth", "volatile", "propofol", "hypnosis"),
-        "stimulus": ("stimulation", "surgical stimulation", "analgesia", "opioid", "remifentanil", "nociception"),
-        "oxygenation": ("oxygenation", "hypoxemia", "desaturation", "ventilation", "one-lung"),
-        "thoracic": ("thoracic", "lung", "one-lung ventilation", "lobectomy"),
+    depth_weight = float(getattr(cfg, "miller_depth_focus_weight", 0.10))
+    depth_weight = max(0.0, min(0.5, depth_weight))
+    focus_groups: Dict[str, Tuple[Tuple[str, ...], float]] = {
+        "hemodynamics": (("hypotension", "blood pressure", "arterial pressure", "map", "perfusion", "vasopressor"), 0.25),
+        "depth": (("bis", "depth of anesthesia", "anesthetic depth", "volatile", "propofol", "hypnosis"), depth_weight),
+        "stimulus": (("stimulation", "surgical stimulation", "analgesia", "opioid", "remifentanil", "nociception"), 0.25),
+        "oxygenation": (("oxygenation", "hypoxemia", "desaturation", "ventilation", "one-lung"), 0.25),
+        "thoracic": (("thoracic", "lung", "one-lung ventilation", "lobectomy"), 0.25),
     }
-    for terms in focus_groups.values():
+    for terms, weight in focus_groups.values():
         if any(term in low for term in terms):
-            score += 0.25
+            score += float(weight)
 
     for tag in intent_tags:
         tag_tokens = [tok for tok in _tokenize_for_bm25(str(tag)) if len(tok) >= 4]
@@ -1198,7 +1564,34 @@ def _clinical_focus_score(text: str, intent_tags: Sequence[str]) -> float:
     return score
 
 
-def build_miller_query(snapshot: Dict[str, Any]) -> str:
+def _parse_allowed_chapters(raw: str) -> set[str]:
+    values: set[str] = set()
+    for token in str(raw or "").split(","):
+        t = str(token).strip()
+        if not t:
+            continue
+        values.add(t.lower())
+        m = re.search(r"\d{1,3}", t)
+        if m:
+            values.add(m.group(0))
+    return values
+
+
+def _chapter_matches(chapter_text: str, allowed: set[str]) -> bool:
+    if not chapter_text:
+        return False
+    chap = str(chapter_text).strip().lower()
+    if not allowed:
+        return True
+    if chap in allowed:
+        return True
+    m = re.search(r"\d{1,3}", chap)
+    if m and m.group(0) in allowed:
+        return True
+    return False
+
+
+def build_miller_query(snapshot: Dict[str, Any], cfg: Optional[Any] = None) -> str:
     patient = snapshot.get("patient_background", {}) if isinstance(snapshot.get("patient_background"), dict) else {}
     assess = snapshot.get("clinical_assessment", {}) if isinstance(snapshot.get("clinical_assessment"), dict) else {}
     recent = (
@@ -1234,7 +1627,7 @@ def build_miller_query(snapshot: Dict[str, Any]) -> str:
     anchor = snapshot.get("anchor_detail", {}) if isinstance(snapshot.get("anchor_detail"), dict) else {}
     med_key = _coerce_text(anchor.get("medication_key"))
     intervention_type = _coerce_text(snapshot.get("interpreted_intervention_type"))
-    intents, rewritten = rewrite_miller_query(snapshot)
+    intents, rewritten = rewrite_miller_query(snapshot, cfg=cfg)
     return (
         "Perioperative anesthesia evidence retrieval query: "
         f"{age}-year-old {sex}, ASA {asa}, department {department}, surgery group {surgery_group}, "
@@ -1255,12 +1648,31 @@ def build_miller_query(snapshot: Dict[str, Any]) -> str:
 def retrieve_miller_context(
     snapshot: Dict[str, Any],
     retriever: MillerRetriever,
-    embedding_client: Any,
+    embedding_client: Optional[Any],
     cfg: PipelineConfig,
 ) -> Dict[str, Any]:
-    query_raw = build_miller_query(snapshot)
-    intent_tags, query_rewritten = rewrite_miller_query(snapshot)
+    query_raw = build_miller_query(snapshot, cfg=cfg)
+    intent_tags, query_rewritten = rewrite_miller_query(snapshot, cfg=cfg)
     bm25_hits = retriever.bm25_search(query_rewritten, max(cfg.miller_top_k * 3, 8))
+    if embedding_client is None:
+        hits = []
+        for rank, item in enumerate(bm25_hits[: cfg.miller_top_k], start=1):
+            ranked = dict(item)
+            ranked["rank"] = rank
+            ranked["text"] = _coerce_text(ranked.get("text"))[: cfg.miller_max_passage_chars]
+            ranked["retrieval_methods"] = ["bm25"]
+            hits.append(ranked)
+        return {
+            "query": query_rewritten,
+            "query_raw": query_raw,
+            "query_rewritten": query_rewritten,
+            "intent_tags": intent_tags,
+            "bm25_results": hits,
+            "dense_results": [],
+            "results": hits,
+            "retrieval_mode": "bm25_only",
+        }
+
     query_vec = _embed_texts(embedding_client, cfg.embedding_model, [query_rewritten])
     if query_vec.shape[0] == 0:
         return {
@@ -1313,11 +1725,28 @@ def retrieve_miller_context(
             fusion[key]["retrieval_methods"] = methods
 
     for item in fusion.values():
-        focus_score = _clinical_focus_score(_coerce_text(item.get("text")), intent_tags)
+        focus_score = _clinical_focus_score(_coerce_text(item.get("text")), intent_tags, cfg=cfg)
         item["clinical_focus_score"] = float(focus_score)
         item["fusion_score"] = float(item.get("fusion_score", 0.0)) + (0.15 * focus_score)
 
-    hits = sorted(fusion.values(), key=lambda x: float(x.get("fusion_score", 0.0)), reverse=True)[: cfg.miller_top_k]
+    ranked_all = sorted(fusion.values(), key=lambda x: float(x.get("fusion_score", 0.0)), reverse=True)
+    require_chapter = bool(getattr(cfg, "miller_require_chapter", False))
+    allowed_chapters = _parse_allowed_chapters(getattr(cfg, "miller_allowed_chapters", ""))
+    if require_chapter or allowed_chapters:
+        filtered: List[Dict[str, Any]] = []
+        for item in ranked_all:
+            parts = _miller_locator_parts(item)
+            chapter = str(parts.get("chapter") or "").strip()
+            if require_chapter and not chapter:
+                continue
+            if allowed_chapters and (not _chapter_matches(chapter, allowed_chapters)):
+                continue
+            filtered.append(item)
+        # Strict by default: if chapter-constrained result exists, only keep constrained hits.
+        # If none exists, fallback to original ranked list to avoid empty retrieval.
+        ranked_all = filtered if filtered else ranked_all
+
+    hits = ranked_all[: cfg.miller_top_k]
     for rank, item in enumerate(hits, start=1):
         item["text"] = _coerce_text(item.get("text"))[: cfg.miller_max_passage_chars]
         item["rank"] = rank
@@ -1371,6 +1800,92 @@ def _sanitize_obj_for_json(obj: Any) -> Any:
 
 def _safe_json_dumps(obj: Dict[str, Any]) -> str:
     return json.dumps(_sanitize_obj_for_json(obj), ensure_ascii=False)
+
+
+def _build_miller_retrieval_log_record(
+    rec: Dict[str, Any],
+    retrieval: Dict[str, Any],
+    max_chars: int,
+) -> Dict[str, Any]:
+    snapshot = rec.get("snapshot", {}) if isinstance(rec.get("snapshot"), dict) else {}
+    output: Dict[str, Any] = {
+        "caseid": rec.get("caseid"),
+        "operation_time_sec": snapshot.get("operation_time_sec"),
+        "query": retrieval.get("query"),
+        "query_raw": retrieval.get("query_raw"),
+        "query_rewritten": retrieval.get("query_rewritten"),
+        "intent_tags": retrieval.get("intent_tags"),
+        "results": [],
+    }
+    for item in retrieval.get("results", []) if isinstance(retrieval.get("results"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        text = _coerce_text(item.get("text"))
+        locator_parts = _miller_locator_parts(item)
+        output["results"].append(
+            {
+                "rank": item.get("rank"),
+                "source": item.get("source"),
+                "chunk_id": item.get("chunk_id"),
+                "chapter": locator_parts.get("chapter"),
+                "section": locator_parts.get("section"),
+                "subsection": locator_parts.get("subsection"),
+                "paragraph": locator_parts.get("paragraph"),
+                "page": locator_parts.get("page"),
+                "line_no": locator_parts.get("line_no"),
+                "locator": _format_miller_locator(item, rank=item.get("rank")),
+                "fusion_score": item.get("fusion_score"),
+                "bm25_rank": item.get("bm25_rank"),
+                "dense_rank": item.get("dense_rank"),
+                "retrieval_methods": item.get("retrieval_methods"),
+                "clinical_focus_score": item.get("clinical_focus_score"),
+                "text": text[: max(100, int(max_chars))],
+            }
+        )
+    return output
+
+
+def _iter_miller_retrieval_csv_rows(log_record: Dict[str, Any]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    query = log_record.get("query")
+    query_raw = log_record.get("query_raw")
+    query_rewritten = log_record.get("query_rewritten")
+    caseid = log_record.get("caseid")
+    op_time = log_record.get("operation_time_sec")
+    intent_tags = log_record.get("intent_tags")
+    intent_text = ", ".join(str(x) for x in intent_tags) if isinstance(intent_tags, list) else str(intent_tags or "")
+    for item in log_record.get("results", []) if isinstance(log_record.get("results"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "caseid": caseid,
+                "operation_time_sec": op_time,
+                "query": query,
+                "query_raw": query_raw,
+                "query_rewritten": query_rewritten,
+                "intent_tags": intent_text,
+                "rank": item.get("rank"),
+                "source": item.get("source"),
+                "chunk_id": item.get("chunk_id"),
+                "chapter": item.get("chapter"),
+                "section": item.get("section"),
+                "subsection": item.get("subsection"),
+                "paragraph": item.get("paragraph"),
+                "page": item.get("page"),
+                "line_no": item.get("line_no"),
+                "locator": item.get("locator"),
+                "fusion_score": item.get("fusion_score"),
+                "bm25_rank": item.get("bm25_rank"),
+                "dense_rank": item.get("dense_rank"),
+                "retrieval_methods": ", ".join(item.get("retrieval_methods", []))
+                if isinstance(item.get("retrieval_methods"), list)
+                else str(item.get("retrieval_methods") or ""),
+                "clinical_focus_score": item.get("clinical_focus_score"),
+                "text": item.get("text"),
+            }
+        )
+    return rows
 
 
 def _physio_filter_series(series: pd.Series, key: Optional[str]) -> pd.Series:
@@ -2740,6 +3255,7 @@ def _format_miller_evidence(retrieval: Optional[Dict[str, Any]]) -> str:
         f"Miller retrieval raw query:\n{query_raw}\n",
         f"Miller retrieval rewritten query:\n{query_rewritten}\n",
         f"Miller retrieval intent tags:\n{intent_text}\n",
+        "Evidence locator format to cite in output: [M10#rank|章节:...; 小节:...; 段落:...; 页:...; chunk:...]",
         "Retrieved evidence excerpts from Miller's Anesthesia, 10th edition (hybrid top-k):",
     ]
     for item in retrieval["results"]:
@@ -2748,8 +3264,9 @@ def _format_miller_evidence(retrieval: Optional[Dict[str, Any]]) -> str:
         chunk_id = item.get("chunk_id")
         methods = ",".join(item.get("retrieval_methods", [])) if isinstance(item.get("retrieval_methods"), list) else ""
         text = _coerce_text(item.get("text"))
+        locator = _format_miller_locator(item, rank=item.get("rank", "?"))
         blocks.append(
-            f"[Evidence #{item.get('rank', '?')}] source={source} chunk={chunk_id} methods={methods} score={score:.4f}\n{text}"
+            f"[Evidence #{item.get('rank', '?')}] {locator} source={source} chunk={chunk_id} methods={methods} score={score:.4f}\n{text}"
         )
     return "\n".join(blocks) + "\n\n"
 
@@ -2764,6 +3281,12 @@ def build_user_prompt(snapshot: Dict[str, Any], retrieval: Optional[Dict[str, An
     kw_text = ", ".join(kws) if kws else "N/A"
     q_focus = _question_focus_instruction(snapshot)
     evidence_block = _format_miller_evidence(retrieval)
+    has_evidence = bool(retrieval and isinstance(retrieval.get("results"), list) and retrieval.get("results"))
+    evidence_rule = (
+        "- 【决策干预（Miller）】必须至少包含1个证据定位标签，格式如 [M10#1|章节:...; 段落:...].\n"
+        if has_evidence
+        else "- 若无检索证据，仍保持三段格式，并在【决策干预（Miller）】中写明“证据定位不足”。\n"
+    )
     return (
         "Below is a real OR monitoring snapshot in structured JSON:\n"
         f"{snap_text}\n\n"
@@ -2782,17 +3305,20 @@ def build_user_prompt(snapshot: Dict[str, Any], retrieval: Optional[Dict[str, An
         "- 【决策干预（Miller）】 MUST be grounded primarily in the retrieved excerpts from Miller's Anesthesia, 10th edition, when such excerpts are provided.\n"
         "- Do not present generic anesthesia knowledge as if it were a Miller 10th edition recommendation unless it is supported by the retrieved excerpts.\n"
         "- If retrieved Miller evidence is incomplete or ambiguous, explicitly stay conservative and fall back to objective physiologic signals in the snapshot.\n"
-        "Please analyze the clinical snapshot first within <think>...</think> tags.\n"
-        "After closing </think>, you MUST output EXACTLY ONE QA pair in Chinese with this strict format:\n\n"
+        f"{evidence_rule}"
+        "You MUST output EXACTLY ONE QA pair in Chinese with this strict format:\n\n"
         "Q: <描述病人背景、术中阶段、体征趋势的流畅段落，最后提问最合理的药理干预>\n"
         "A: 【临床推理】：<精炼总结核心病理生理机制>\n"
-        "【决策干预（Miller）】：<基于第十版米勒麻醉学检索证据的建议，优先考虑灌注与氧合>\n"
+        "【决策干预（Miller）】：<基于第十版米勒麻醉学检索证据的建议，必须写出证据定位如[M10#1|章节:...; 段落:...]>\n"
         "【决策干预（VitalDB）】：<与logged_action一致的实际策略，不得与golden冲突>\n\n"
+        "The final QA block MUST be exactly these 4 lines (one line per label), no extra lines before or after.\n"
+        "Use labels exactly as: Q:, A:, 【临床推理】, 【决策干预（Miller）】, 【决策干预（VitalDB）】.\n"
+        "Do not change brackets, punctuation, or label names.\n"
         "If BIS data is missing, evaluate anesthesia depth indirectly using autonomic signs "
         "(HR, MBP trends) and surgical stimulation context.\n"
         "Use 'clinical_assessment.risk_flags', 'contextual_interpretation', "
         "'baseline_comparison', and 'drug_reference' to improve realism.\n"
-        "Do not output any text outside <think> and the final QA pair.\n"
+        "Do not output any text outside the final QA pair.\n"
         "Forbidden: instruction echo, Analyze/Strategy/Constraint Check, bullet list, self-correction text."
     )
     
@@ -2843,6 +3369,21 @@ def _is_strict_qa(text: str) -> bool:
         return False
     if not has_decision_dual:
         return False
+    lines = [line.strip() for line in out.splitlines() if line.strip()]
+    if len(lines) != 4:
+        return False
+    if not lines[0].startswith("Q:"):
+        return False
+    if not lines[1].startswith("A:"):
+        return False
+    if not lines[2].startswith("【决策干预（Miller）】"):
+        return False
+    if not lines[3].startswith("【决策干预（VitalDB）】"):
+        return False
+    miller_line = lines[2]
+    has_locator = bool(re.search(r"(?i)m10\s*#\d+", miller_line)) or ("章节:" in miller_line and "段落:" in miller_line)
+    if not has_locator:
+        return False
     return True
 
 
@@ -2881,17 +3422,19 @@ def _repair_qa_output(client: Any, model: str, raw_text: str, snapshot: Dict[str
     kws = hint.get("keywords", [])
     kw_text = ", ".join(kws) if kws else "N/A"
     repair_sys = (
-        "You are a medical text formatter. "
+        "You are a strict medical QA formatter. "
         "Return only final QA in Chinese. "
-        "No thinking process, no bullets, no instruction echo."
+        "No thinking process, no bullets, no markdown, no instruction echo, no extra preface/suffix."
     )
     repair_user = (
-        "Rewrite to strict format. Output only:\n"
-        "Q: ...\n"
-        "A: 【临床推理】：...\n"
-        "【决策干预（Miller）】：...\n"
-        "【决策干预（VitalDB）】：...\n\n"
+        "Rewrite to strict format. You MUST output EXACTLY this 4-line template:\n"
+        "Q: <一句问题>\n"
+        "A: 【临床推理】：<1-3句>\n"
+        "【决策干预（Miller）】：<1-3句，且必须包含证据定位标签如[M10#1|章节:...; 段落:...]>\n"
+        "【决策干预（VitalDB）】：<1-2句>\n\n"
         "Do not output Analyze/Strategy/Constraint Check/self-correction text.\n"
+        "Do not output anything outside the 4-line QA block.\n"
+        "Miller line must include at least one M10 locator token.\n"
         f"Golden logged_action: {actual}\n"
         f"Golden medication_key: {med_key}\n"
         f"Expected drug keywords in 【决策干预（VitalDB）】: {kw_text}\n"
@@ -3135,16 +3678,46 @@ def stage3_generate_qa(records: List[Dict[str, Any]], cfg: PipelineConfig) -> No
 
     if cfg.enable_miller_rag:
         print(">>> Stage 3a: build Miller embedding retriever")
-        shared_embed_client = create_embedding_client(cfg)
-        retriever = build_miller_retriever(shared_embed_client, cfg)
+        cache_loaded = False
+        try:
+            retriever = build_miller_retriever(None, cfg)
+            cache_loaded = True
+        except RuntimeError:
+            cache_loaded = False
+
+        if not cache_loaded:
+            shared_embed_client = create_embedding_client(cfg)
+            retriever = build_miller_retriever(shared_embed_client, cfg)
+        else:
+            try:
+                shared_embed_client = create_embedding_client(cfg)
+            except Exception as e:  # noqa: BLE001
+                shared_embed_client = None
+                print(f"  - embedding client unavailable, fallback to BM25-only retrieval: {e}")
         print(f"  - Miller retriever ready: {len(retriever.passages)} chunks")
 
     os.makedirs(os.path.dirname(cfg.llm_jsonl), exist_ok=True)
+    retrieval_log_path = cfg.miller_retrieval_log_jsonl.strip()
+    retrieval_csv_path = cfg.miller_retrieval_log_csv.strip()
+    if cfg.enable_miller_rag and retrieval_log_path:
+        os.makedirs(os.path.dirname(retrieval_log_path), exist_ok=True)
+        print(f"  - Miller retrieval log: {retrieval_log_path}")
+    if cfg.enable_miller_rag and retrieval_csv_path:
+        os.makedirs(os.path.dirname(retrieval_csv_path), exist_ok=True)
+        print(f"  - Miller retrieval csv: {retrieval_csv_path}")
 
     if workers <= 1:
         client = create_openai_client(cfg)
         embed_client = shared_embed_client if cfg.enable_miller_rag else None
-        with open(cfg.llm_jsonl, "w", encoding="utf-8") as f:
+        retrieval_ctx = open(retrieval_log_path, "w", encoding="utf-8") if (cfg.enable_miller_rag and retrieval_log_path) else nullcontext(None)
+        retrieval_csv_ctx = (
+            open(retrieval_csv_path, "w", encoding="utf-8", newline="")
+            if (cfg.enable_miller_rag and retrieval_csv_path)
+            else nullcontext(None)
+        )
+        with open(cfg.llm_jsonl, "w", encoding="utf-8") as f, retrieval_ctx as retrieval_f, retrieval_csv_ctx as retrieval_csv_f:
+            csv_writer = None
+            csv_header_written = False
             for i, rec in enumerate(records, start=1):
                 if i % progress_every == 0 or i == total:
                     print(f"  - LLM progress: {i}/{total}")
@@ -3165,9 +3738,26 @@ def stage3_generate_qa(records: List[Dict[str, Any]], cfg: PipelineConfig) -> No
                     val_kept += 1
 
                 retrieval = None
-                if cfg.enable_miller_rag and embed_client is not None:
+                if cfg.enable_miller_rag:
                     retrieval = retrieve_miller_context(rec["snapshot"], retriever, embed_client, cfg)
                     rec["miller_retrieval"] = retrieval
+                    if retrieval_f is not None:
+                        retrieval_log_rec = _build_miller_retrieval_log_record(
+                            rec=rec,
+                            retrieval=retrieval,
+                            max_chars=cfg.miller_retrieval_log_max_chars,
+                        )
+                        retrieval_f.write(_safe_json_dumps(retrieval_log_rec) + "\n")
+                        if retrieval_csv_f is not None:
+                            csv_rows = _iter_miller_retrieval_csv_rows(retrieval_log_rec)
+                            if csv_rows:
+                                if csv_writer is None:
+                                    csv_writer = csv.DictWriter(retrieval_csv_f, fieldnames=list(csv_rows[0].keys()))
+                                if not csv_header_written:
+                                    csv_writer.writeheader()
+                                    csv_header_written = True
+                                for row in csv_rows:
+                                    csv_writer.writerow(row)
 
                 rec["llm_output"] = generate_single_qa(
                     client,
@@ -3189,7 +3779,14 @@ def stage3_generate_qa(records: List[Dict[str, Any]], cfg: PipelineConfig) -> No
 
     def _get_thread_embed_client() -> Any:
         if not hasattr(thread_local, "embed_client"):
-            thread_local.embed_client = create_embedding_client(cfg)
+            if shared_embed_client is None:
+                thread_local.embed_client = None
+            else:
+                try:
+                    thread_local.embed_client = create_embedding_client(cfg)
+                except Exception as e:  # noqa: BLE001
+                    print(f"  - embedding client unavailable in worker, fallback BM25-only: {e}")
+                    thread_local.embed_client = None
         return thread_local.embed_client
 
     def _worker(
@@ -3223,7 +3820,15 @@ def stage3_generate_qa(records: List[Dict[str, Any]], cfg: PipelineConfig) -> No
                 None,
             )
 
-    with ThreadPoolExecutor(max_workers=workers) as ex, open(cfg.llm_jsonl, "w", encoding="utf-8") as f:
+    retrieval_ctx = open(retrieval_log_path, "w", encoding="utf-8") if (cfg.enable_miller_rag and retrieval_log_path) else nullcontext(None)
+    retrieval_csv_ctx = (
+        open(retrieval_csv_path, "w", encoding="utf-8", newline="")
+        if (cfg.enable_miller_rag and retrieval_csv_path)
+        else nullcontext(None)
+    )
+    with ThreadPoolExecutor(max_workers=workers) as ex, open(cfg.llm_jsonl, "w", encoding="utf-8") as f, retrieval_ctx as retrieval_f, retrieval_csv_ctx as retrieval_csv_f:
+        csv_writer = None
+        csv_header_written = False
         futures = [ex.submit(_worker, idx, rec["snapshot"]) for idx, rec in enumerate(records)]
         done = 0
         for fut in as_completed(futures):
@@ -3231,6 +3836,23 @@ def stage3_generate_qa(records: List[Dict[str, Any]], cfg: PipelineConfig) -> No
             records[idx]["llm_output"] = qa
             if retrieval is not None:
                 records[idx]["miller_retrieval"] = retrieval
+                if retrieval_f is not None:
+                    retrieval_log_rec = _build_miller_retrieval_log_record(
+                        rec=records[idx],
+                        retrieval=retrieval,
+                        max_chars=cfg.miller_retrieval_log_max_chars,
+                    )
+                    retrieval_f.write(_safe_json_dumps(retrieval_log_rec) + "\n")
+                    if retrieval_csv_f is not None:
+                        csv_rows = _iter_miller_retrieval_csv_rows(retrieval_log_rec)
+                        if csv_rows:
+                            if csv_writer is None:
+                                csv_writer = csv.DictWriter(retrieval_csv_f, fieldnames=list(csv_rows[0].keys()))
+                            if not csv_header_written:
+                                csv_writer.writeheader()
+                                csv_header_written = True
+                            for row in csv_rows:
+                                csv_writer.writerow(row)
             if cfg.validate_actual_before_qa:
                 records[idx]["actual_validation"] = meta
                 val_checked += 1
@@ -3461,115 +4083,99 @@ def evaluate_vitaldb_vs_miller(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     anchor = snapshot.get("anchor_detail", {}) if isinstance(snapshot.get("anchor_detail"), dict) else {}
     delta = _safe_float(anchor.get("delta"))
     is_escalation = _is_action_escalation(snapshot, delta)
-    classes_worsen_perfusion = {"hypnotic_iv", "hypnotic_volatile", "anti_sympathetic", "vasodilator", "inodilator"}
+    clinical_rules = _load_clinical_conflict_rules()
+    classes_worsen_perfusion = set(
+        str(x).strip()
+        for x in clinical_rules.get("classes_worsen_perfusion", [])
+        if str(x).strip()
+    )
+    map_below_75 = (map_now is not None) and (map_now < 75.0)
+    map_ge_65 = (map_now is not None) and (map_now >= 65.0)
+    map_ge_75 = (map_now is not None) and (map_now >= 75.0)
+
+    facts: Dict[str, bool] = {
+        "strategy_oxygenation_first": "oxygenation_first" in strategies,
+        "strategy_perfusion_first": "perfusion_first" in strategies,
+        "strategy_reduce_depth": "reduce_depth" in strategies,
+        "strategy_consider_depth_or_analgesia_increase": "consider_depth_or_analgesia_increase" in strategies,
+        "strategy_context_monitoring": "context_monitoring" in strategies,
+        "action_escalation": bool(is_escalation),
+        "class_worsen_perfusion": actual_class in classes_worsen_perfusion,
+        "class_hypnotic_or_vasodilator_inodilator": actual_class in {"hypnotic_iv", "hypnotic_volatile", "vasodilator", "inodilator"},
+        "class_hypnotic": actual_class in {"hypnotic_iv", "hypnotic_volatile"},
+        "class_vasopressor_or_inopressor": actual_class in {"vasopressor", "inopressor"},
+        "class_opioid_or_hypnotic": actual_class in {"opioid_analgesic", "hypnotic_iv", "hypnotic_volatile"},
+        "class_monitoring_compatible": actual_class in {"unknown", "neuromuscular", "arrhythmia"},
+        "drug_phenylephrine": actual_drug == "phenylephrine",
+        "drug_ephedrine": actual_drug == "ephedrine",
+        "drug_norepinephrine": actual_drug == "norepinephrine",
+        "drug_epinephrine": actual_drug == "epinephrine",
+        "drug_nitroglycerin": actual_drug == "nitroglycerin",
+        "drug_milrinone": actual_drug == "milrinone",
+        "drug_atropine": actual_drug == "atropine",
+        "drug_propofol": actual_drug == "propofol",
+        "drug_remifentanil": actual_drug == "remifentanil",
+        "drug_vasodilator_or_inodilator": actual_drug in {"nitroglycerin", "milrinone"},
+        "map_low": bool(map_low),
+        "map_below_75": bool(map_below_75),
+        "map_lt_55": (map_now is not None) and (map_now < 55.0),
+        "map_not_lt_55": (map_now is None) or (map_now >= 55.0),
+        "map_ge_65": bool(map_ge_65),
+        "map_ge_75": bool(map_ge_75),
+        "map_drop_ge_relative": (map_drop_pct is not None) and (map_drop_pct >= ANES_THRESHOLDS["map_relative_drop_pct"]),
+        "bis_high": (bis_now is not None) and (bis_now > ANES_THRESHOLDS["bis_light"]),
+        "hr_lt_50": (hr_now is not None) and (hr_now < 50.0),
+        "hr_lt_60": (hr_now is not None) and (hr_now < 60.0),
+        "hr_lt_45": (hr_now is not None) and (hr_now < 45.0),
+        "hr_gt_100": (hr_now is not None) and (hr_now > 100.0),
+        "hr_gt_110": (hr_now is not None) and (hr_now > 110.0),
+        "hr_le_100": (hr_now is not None) and (hr_now <= 100.0),
+        "hr_not_low": (hr_now is None) or (hr_now >= 60.0),
+        "delta_negative": (delta is not None) and (delta < 0),
+        "severe_hypotension": bool(severe_hypotension),
+    }
 
     conflicts: List[str] = []
-    partial_reasons: List[str] = []
-    if "oxygenation_first" in strategies and actual_class in classes_worsen_perfusion and is_escalation:
-        conflicts.append("低氧场景下优先氧合，但VitalDB策略偏向加深麻醉或降压。")
-    if "perfusion_first" in strategies and actual_class in classes_worsen_perfusion and is_escalation:
-        conflicts.append("低灌注场景下应先稳灌注，VitalDB策略可能进一步压低血压。")
-    if map_low and actual_class in {"hypnotic_iv", "hypnotic_volatile", "vasodilator", "inodilator"} and is_escalation:
-        conflicts.append("MAP<65时继续升级催眠/吸入麻醉或扩血管药，方向上不符合灌注优先。")
-    if (
-        map_now is not None
-        and map_now < 75.0
-        and bis_now is not None
-        and bis_now > ANES_THRESHOLDS["bis_light"]
-        and actual_class in {"hypnotic_iv", "hypnotic_volatile"}
-        and is_escalation
-    ):
-        conflicts.append("BIS高但MAP已接近/低于灌注安全边界时，单纯加深催眠药风险偏高。")
-    if "reduce_depth" in strategies and actual_class in {"hypnotic_iv", "hypnotic_volatile"} and is_escalation:
-        conflicts.append("BIS低+低灌注时应减浅麻醉，但VitalDB记录为加深麻醉。")
-    if is_escalation and actual_drug == "phenylephrine" and hr_now is not None and hr_now < 50.0:
-        conflicts.append("去氧肾上腺素在严重心动过缓时可诱发反射性进一步降心率，应避免。")
-    if is_escalation and actual_drug == "ephedrine" and hr_now is not None and hr_now > 100.0:
-        conflicts.append("麻黄碱在心动过速状态下会进一步推高心率，存在心肌缺血/室性心律失常风险。")
-    if is_escalation and actual_drug == "epinephrine" and (map_now is None or map_now >= 55.0):
-        conflicts.append("肾上腺素不宜作为非抢救性常规升压手段。")
-    if is_escalation and actual_drug == "nitroglycerin" and map_low:
-        conflicts.append("MAP<65时升级硝酸甘油可导致回心血量骤降并加重循环崩溃风险。")
-    if is_escalation and actual_drug == "milrinone" and map_low:
-        conflicts.append("低血压未纠正前升级米力农可能因扩血管效应导致血压进一步下降。")
-    if is_escalation and actual_drug == "atropine" and hr_now is not None and hr_now > 100.0:
-        conflicts.append("阿托品在已心动过速时不合适，可能进一步加重心率失控。")
-    if is_escalation and actual_drug == "propofol" and severe_hypotension:
-        conflicts.append("重度低灌注状态下继续加深丙泊酚可能显著恶化循环。")
-    if (
-        is_escalation
-        and actual_drug == "remifentanil"
-        and map_low
-        and hr_now is not None
-        and hr_now < 50.0
-    ):
-        conflicts.append("不明原因心动过缓合并低血压时升级瑞芬太尼可加重缓慢性循环抑制。")
-    if (
-        is_escalation
-        and actual_drug == "remifentanil"
-        and map_now is not None
-        and map_now < 55.0
-    ):
-        conflicts.append("重度低血压时升级瑞芬太尼可能进一步抑制交感反应，应先纠正灌注。")
-    if (
-        is_escalation
-        and actual_drug == "norepinephrine"
-        and severe_hypotension
-        and hr_now is not None
-        and hr_now > 110.0
-        and map_drop_pct is not None
-        and map_drop_pct >= ANES_THRESHOLDS["map_relative_drop_pct"]
-    ):
-        conflicts.append("疑似低容量未纠正时直接强化去甲升压，可能增加微循环灌注不足风险。")
+    high_risk_conflict = False
+    for rule in clinical_rules.get("conflict_rules", []):
+        if not isinstance(rule, dict):
+            continue
+        if _rule_matches_facts(rule, facts):
+            reason = str(rule.get("reason", "")).strip()
+            if reason:
+                conflicts.append(reason)
+            if bool(rule.get("high_risk", False)):
+                high_risk_conflict = True
 
     aligned = False
-    if actual_class in {"vasopressor", "inopressor"} and "perfusion_first" in strategies:
-        aligned = True
-    elif actual_class in {"vasopressor", "inopressor"} and map_low:
-        partial_reasons.append("MAP已低但尚未达到持续/重度低灌注规则，升压方向部分合理。")
-    elif actual_class in {"opioid_analgesic", "hypnotic_iv", "hypnotic_volatile"} and "consider_depth_or_analgesia_increase" in strategies:
-        aligned = True
-        if map_now is not None and map_now < 75.0:
-            partial_reasons.append("BIS升高支持加深镇静/镇痛，但MAP接近灌注下限，需小步滴定和复评。")
-    elif actual_class in {"hypnotic_iv", "hypnotic_volatile"} and "reduce_depth" in strategies and (delta is not None and delta < 0):
-        aligned = True
-    elif "context_monitoring" in strategies and actual_class in {"unknown", "neuromuscular", "arrhythmia"}:
-        aligned = True
-    elif actual_drug == "phenylephrine" and severe_hypotension and (hr_now is None or hr_now >= 60.0):
-        aligned = True
-    elif (
-        actual_drug == "ephedrine"
-        and severe_hypotension
-        and hr_now is not None
-        and hr_now < 60.0
-        and hr_now <= 100.0
-    ):
-        aligned = True
-    elif actual_drug == "norepinephrine" and severe_hypotension:
-        aligned = True
-    elif actual_drug == "epinephrine" and (map_now is not None and map_now < 55.0):
-        aligned = True
-    elif actual_drug == "atropine" and severe_hypotension and (hr_now is not None and hr_now < 45.0):
-        aligned = True
-    elif actual_drug in {"nitroglycerin", "milrinone"} and (map_now is not None and map_now >= 65.0):
-        if map_now < 75.0:
-            partial_reasons.append("MAP虽未低于65，但扩血管/正性肌力药仍需严密复评灌注。")
-        else:
+    aligned_reason = "action_class_matches_miller_priority"
+    partial_reasons: List[str] = []
+    for rule in clinical_rules.get("alignment_rules", []):
+        if not isinstance(rule, dict):
+            continue
+        if not _rule_matches_facts(rule, facts):
+            continue
+        outcome = str(rule.get("outcome", "")).strip().lower()
+        reason = str(rule.get("reason", "")).strip()
+        if outcome == "aligned":
             aligned = True
+            if reason:
+                aligned_reason = reason
+        elif outcome in {"partial", "partially_aligned"}:
+            if reason:
+                partial_reasons.append(reason)
 
     verdict = "uncertain"
     reason = "insufficient_discriminative_signal"
-    high_risk_conflict = False
     if conflicts:
         verdict = "misaligned"
         reason = conflicts[0]
-        high_risk_conflict = any(("低灌注" in x) or ("低氧" in x) or ("MAP<65" in x) or ("重度低血压" in x) for x in conflicts)
     elif partial_reasons:
         verdict = "partially_aligned"
         reason = partial_reasons[0]
     elif aligned:
         verdict = "aligned"
-        reason = "action_class_matches_miller_priority"
+        reason = aligned_reason
 
     return {
         "verdict": verdict,
@@ -4116,6 +4722,28 @@ def parse_args() -> PipelineConfig:
         help="Maximum characters kept for each retrieved passage in prompt injection.",
     )
     parser.add_argument(
+        "--miller-bis-intent-mode",
+        default="paired_only",
+        choices=["full", "paired_only", "off"],
+        help="How strongly BIS drives Miller retrieval intents: full / paired_only / off.",
+    )
+    parser.add_argument(
+        "--miller-depth-focus-weight",
+        type=float,
+        default=0.10,
+        help="Weight of depth/BIS terms in clinical_focus_score rerank (default lowered from 0.25).",
+    )
+    parser.add_argument(
+        "--miller-require-chapter",
+        action="store_true",
+        help="Require retrieved passages to have a chapter locator when possible.",
+    )
+    parser.add_argument(
+        "--miller-allowed-chapters",
+        default="",
+        help="Optional comma-separated chapter constraints, e.g. '21,35'.",
+    )
+    parser.add_argument(
         "--embedding-backend",
         default="auto",
         choices=["auto", "api", "local"],
@@ -4148,6 +4776,22 @@ def parse_args() -> PipelineConfig:
     )
     parser.add_argument("--llm-max-workers", type=int, default=1, help="Parallel LLM workers.")
     parser.add_argument("--llm-progress-every", type=int, default=10, help="Print LLM progress every N records.")
+    parser.add_argument(
+        "--miller-retrieval-log-jsonl",
+        default="",
+        help="Optional JSONL path to record Miller retrieval query and Top-k evidence per sample.",
+    )
+    parser.add_argument(
+        "--miller-retrieval-log-max-chars",
+        type=int,
+        default=1200,
+        help="Max chars kept for each logged Miller evidence snippet.",
+    )
+    parser.add_argument(
+        "--miller-retrieval-log-csv",
+        default="",
+        help="Optional CSV path to record Miller retrieval results (one row per retrieved chunk).",
+    )
     parser.add_argument("--overwrite-jsonl", action="store_true")
     parser.add_argument("--sample-rate", type=float, default=0.05)
     parser.add_argument("--random-seed", type=int, default=42)
@@ -4189,6 +4833,16 @@ def parse_args() -> PipelineConfig:
     group_root = os.path.join(args.output_dir, "Data")
     image_root = os.path.join(args.output_dir, "images")
     dataset_root = os.path.join(args.output_dir, "datasets")
+    retrieval_log_jsonl = (
+        args.miller_retrieval_log_jsonl.strip()
+        if str(args.miller_retrieval_log_jsonl).strip()
+        else os.path.join(dataset_root, "miller_retrieval_records.jsonl")
+    )
+    retrieval_log_csv = (
+        args.miller_retrieval_log_csv.strip()
+        if str(args.miller_retrieval_log_csv).strip()
+        else os.path.join(dataset_root, "miller_retrieval_records.csv")
+    )
 
     return PipelineConfig(
         clinical_csv=args.clinical_csv,
@@ -4198,6 +4852,9 @@ def parse_args() -> PipelineConfig:
         dataset_jsonl=os.path.join(dataset_root, "anes_qa_dataset.jsonl"),
         snapshot_json=os.path.join(dataset_root, "snapshots.json"),
         llm_jsonl=os.path.join(dataset_root, "llm_outputs.jsonl"),
+        miller_retrieval_log_jsonl=retrieval_log_jsonl,
+        miller_retrieval_log_csv=retrieval_log_csv,
+        miller_retrieval_log_max_chars=max(200, int(args.miller_retrieval_log_max_chars)),
         signal_interval_sec=args.signal_interval_sec,
         med_check_interval_sec=args.med_check_interval_sec,
         window_sec=args.window_sec,
@@ -4248,6 +4905,10 @@ def parse_args() -> PipelineConfig:
         miller_chunk_chars=max(300, int(args.miller_chunk_chars)),
         miller_chunk_overlap_chars=max(0, min(int(args.miller_chunk_overlap_chars), max(299, int(args.miller_chunk_chars) - 1))),
         miller_max_passage_chars=max(200, int(args.miller_max_passage_chars)),
+        miller_bis_intent_mode=str(args.miller_bis_intent_mode).strip().lower(),
+        miller_depth_focus_weight=max(0.0, min(0.5, float(args.miller_depth_focus_weight))),
+        miller_require_chapter=bool(args.miller_require_chapter),
+        miller_allowed_chapters=str(args.miller_allowed_chapters or "").strip(),
         embedding_backend=args.embedding_backend,
         embedding_model=args.embedding_model,
         embedding_device=args.embedding_device,

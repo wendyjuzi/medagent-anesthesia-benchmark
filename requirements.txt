@@ -6,3 +6,4 @@ openai
 pypdf
 sentence-transformers
 requests
+PyYAML

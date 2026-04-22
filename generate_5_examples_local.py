@@ -63,6 +63,9 @@ def build_local_cfg(args: argparse.Namespace) -> PipelineConfig:
         dataset_jsonl=os.path.join(dataset_root, "anes_qa_dataset.jsonl"),
         snapshot_json=os.path.join(dataset_root, "snapshots.json"),
         llm_jsonl=os.path.join(dataset_root, "llm_outputs.jsonl"),
+        miller_retrieval_log_jsonl=os.path.join(dataset_root, "miller_retrieval_records.jsonl"),
+        miller_retrieval_log_csv=os.path.join(dataset_root, "miller_retrieval_records.csv"),
+        miller_retrieval_log_max_chars=max(200, int(args.miller_max_passage_chars)),
         signal_interval_sec=args.signal_interval_sec,
         med_check_interval_sec=args.med_check_interval_sec,
         window_sec=args.window_sec,
@@ -113,6 +116,10 @@ def build_local_cfg(args: argparse.Namespace) -> PipelineConfig:
         miller_chunk_chars=max(300, int(args.miller_chunk_chars)),
         miller_chunk_overlap_chars=max(0, min(int(args.miller_chunk_overlap_chars), max(299, int(args.miller_chunk_chars) - 1))),
         miller_max_passage_chars=max(200, int(args.miller_max_passage_chars)),
+        miller_bis_intent_mode=str(args.miller_bis_intent_mode).strip().lower(),
+        miller_depth_focus_weight=max(0.0, min(0.5, float(args.miller_depth_focus_weight))),
+        miller_require_chapter=bool(args.miller_require_chapter),
+        miller_allowed_chapters=str(args.miller_allowed_chapters or "").strip(),
         embedding_backend=args.embedding_backend,
         embedding_model=args.embedding_model,
         embedding_device=args.embedding_device,
@@ -335,6 +342,28 @@ def main() -> None:
     parser.add_argument("--miller-chunk-chars", type=int, default=1200)
     parser.add_argument("--miller-chunk-overlap-chars", type=int, default=200)
     parser.add_argument("--miller-max-passage-chars", type=int, default=800)
+    parser.add_argument(
+        "--miller-bis-intent-mode",
+        default="paired_only",
+        choices=["full", "paired_only", "off"],
+        help="How strongly BIS drives Miller retrieval intents.",
+    )
+    parser.add_argument(
+        "--miller-depth-focus-weight",
+        type=float,
+        default=0.10,
+        help="Weight of BIS/depth terms in retrieval rerank clinical focus score.",
+    )
+    parser.add_argument(
+        "--miller-require-chapter",
+        action="store_true",
+        help="Require retrieved passages to have chapter locator when possible.",
+    )
+    parser.add_argument(
+        "--miller-allowed-chapters",
+        default="",
+        help="Optional comma-separated chapter constraints, e.g. '21,35'.",
+    )
     parser.add_argument("--embedding-backend", default="auto", choices=["auto", "api", "local"])
     parser.add_argument("--embedding-model", default="text-embedding-3-small")
     parser.add_argument("--embedding-device", default="cpu")
