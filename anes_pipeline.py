@@ -224,6 +224,21 @@ LEAK_TOKEN_RE = re.compile(
     r")\b"
 )
 
+Q_SUBJECTIVE_HINT_PATTERNS: Tuple[str, ...] = (
+    r"提示",
+    r"显示",
+    r"考虑",
+    r"怀疑",
+    r"警惕",
+    r"符合",
+    r"循环稳定",
+    r"循环不稳",
+    r"血流动力学稳定",
+    r"麻醉深度不足",
+    r"麻醉过深",
+    r"麻醉过浅",
+)
+
 VITAL_TRACK_CANDIDATES: Dict[str, List[str]] = {
     "HR": [
         "Solar8000/HR",
@@ -260,6 +275,17 @@ VITAL_UNIT = {
     "MBP": "mmHg",
     "SPO2": "%",
     "BIS": "",
+}
+
+CANONICAL_UNIT_GUIDE = {
+    "MAP": "mmHg",
+    "HR": "bpm",
+    "SpO2": "%",
+    "BIS": "index",
+    "infusion_rate": "mL/h",
+    "bolus_volume": "mL",
+    "volatile_concentration": "vol%",
+    "time": "s or min",
 }
 
 MEDICATION_DISPLAY = {
@@ -643,6 +669,9 @@ Q: ...
 A: 【临床推理】：...
 【决策干预（Miller）】：...
 【决策干预（VitalDB）】：...
+Q must be objective only (background + recent physiologic values/trends + intervention question), with no subjective clinical interpretation hints.
+In 【决策干预（Miller）】, use three-part structure: 诊断依据：...; 具体干预：...; 原文摘录："...[M10 | ...]".
+In 【决策干预（VitalDB）】, generate one concise action aligned to logged_action (drug + direction + core numeric value + unit); if logged_action has no reassessment, do not add reassessment or escalation text.
 Do not output any bullets, headings, checklists, drafting notes, or instruction echoes.
 """.strip()
 
@@ -688,37 +717,37 @@ FEWSHOT_BY_TYPE: Dict[str, str] = {
         "### Example (continuous_infusion)\n"
         "<think>患者胸外科术中，近5分钟 MAP 下行而 BIS 上升，提示麻醉深度与血流动力学存在冲突。"
         "先稳灌注，再小步调整镇静药速率。</think>\n"
-        "Q: 胸外科术中患者在维持期出现血压下降趋势，同时麻醉深度指标波动，此时应如何进行更安全的药物调整以兼顾灌注和镇静？\n"
+        "Q: 67岁男性，ASA III，胸外科维持期，近5分钟 MAP 72→58 mmHg、HR 86→102 bpm、SpO2 98→97%、BIS 52→66，结合手术背景，此时最合理的干预措施是什么？\n"
         "A: 【临床推理】：当前关键矛盾是循环稳定性与麻醉深度的平衡。若在低灌注状态下盲目加深镇静，可能进一步加重低血压并影响器官灌注。\n"
-        "【决策干预（Miller）】：优先纠正灌注（如滴定升压药），再小步调整镇静/镇痛，并设定短周期复评。\n"
-        "【决策干预（VitalDB）】：按记录用药类别执行并复核其与当前血流动力学是否一致。\n"
+        "【决策干预（Miller）】：诊断依据：MAP持续低于65 mmHg且BIS上行; 具体干预：先滴定升压药0.1-0.3 mL/h并2 min复评，MAP≥65 mmHg后再小步调整镇静; 原文摘录:\"treat hypotension before deepening anesthesia\" [M10 | 术中相关章节: Hemodynamic management | p.1493]。\n"
+        "【决策干预（VitalDB）】：将去氧肾上腺素泵速上调至0.1-0.3 mL/h。\n"
         "### End Example\n"
     ),
     "bolus_like_event": (
         "### Example (bolus_like_event)\n"
         "<think>患者短时刺激期体征上冲，单次追加药物应以短效、可回退为原则。需避免过度镇静后低血压。</think>\n"
-        "Q: 患者在术中刺激期出现体征突变，何时应考虑单次追加给药而非持续大幅上调泵速？\n"
+        "Q: 54岁女性，腹部手术刺激期，近3分钟 MAP 78→84 mmHg、HR 78→108 bpm、SpO2 99→99%、BIS 47→64，结合手术背景，此时最合理的干预措施是什么？\n"
         "A: 【临床推理】：短时、可逆的生理波动更适合短效追加干预；持续上调可能带来过量风险。需要结合血压、心率与麻醉深度的同步变化判断。\n"
-        "【决策干预（Miller）】：可优先短效小剂量追加，并在1-3分钟内复评后决定是否继续升级。\n"
-        "【决策干预（VitalDB）】：按记录药物类别执行对应的追加/调速策略并保留可回退性。\n"
+        "【决策干预（Miller）】：诊断依据：BIS和HR同步上冲且MAP未低于65 mmHg; 具体干预：同类短效药单次追加0.5-1.0 mL，1-2 min复评后决定是否再追加0.5 mL; 原文摘录:\"short-acting incremental dosing with rapid reassessment\" [M10 | 术中相关章节: Analgesic titration | p.1521]。\n"
+        "【决策干预（VitalDB）】：单次追加同类短效药0.5-1.0 mL。\n"
         "### End Example\n"
     ),
     "arrhythmia_event": (
         "### Example (arrhythmia_event)\n"
         "<think>出现心律事件时，先判断血流动力学稳定性，再决定是否立即药理/电复律路径。麻醉深度与氧合通气也需并行评估。</think>\n"
-        "Q: 术中突发心律失常标注事件时，最关键的初始处理优先级是什么？\n"
+        "Q: 69岁男性，泌尿外科术中突发心律失常标注，当前 MAP 62 mmHg、HR 42 bpm、SpO2 95%、BIS 45，且近2分钟MAP与HR均下降，结合手术背景，此时最合理的干预措施是什么？\n"
         "A: 【临床推理】：处理顺序应先看灌注与血压稳定性，再区分可观察与需立即干预的节律。同时排查缺氧、二氧化碳潴留、电解质异常及麻醉深度不匹配。\n"
-        "【决策干预（Miller）】：若循环不稳先按围术期急救流程处理；循环稳定时先纠正诱因后再保守滴定节律控制药。\n"
-        "【决策干预（VitalDB）】：按记录干预执行，并核对是否与当前循环稳定性等级匹配。\n"
+        "【决策干预（Miller）】：诊断依据：心律事件伴MAP<65 mmHg和HR<50 bpm; 具体干预：先执行不稳定节律路径并给予同类急救药物追加0.5 mL，30-60 s复评后再决定升级; 原文摘录:\"hemodynamic instability determines urgency of treatment\" [M10 | 术中相关章节: Perioperative arrhythmia | p.1608]。\n"
+        "【决策干预（VitalDB）】：立即追加同类急救药物0.5 mL。\n"
         "### End Example\n"
     ),
     "unlabeled_context_snapshot": (
         "### Example (unlabeled_context_snapshot)\n"
         "<think>无明确事件标签时，依据趋势而非单点，优先识别威胁灌注与氧合的指标。在信息不全时给出保守且可复评的决策。</think>\n"
-        "Q: 在缺少明确事件标签的术中快照中，如何基于趋势信息做出安全的药理决策？\n"
+        "Q: 61岁女性，骨科维持期无明确事件标签，近5分钟 MAP 70→63 mmHg、HR 76→82 bpm、SpO2 98→96%、BIS 43→41，结合手术背景，此时最合理的干预措施是什么？\n"
         "A: 【临床推理】：应以 MAP/SpO2/HR 的连续趋势为主线，避免仅凭单一瞬时异常下结论。信息缺失时优先采取可逆、可滴定的策略。\n"
-        "【决策干预（Miller）】：先小步幅、可逆调整并设置1-3分钟复评窗口，再决定是否升级干预。\n"
-        "【决策干预（VitalDB）】：按照记录药物策略执行，同时持续监测MAP/HR/SpO2验证有效性。\n"
+        "【决策干预（Miller）】：诊断依据：MAP持续下降并接近65 mmHg阈值; 具体干预：先小步调整同类循环支持0.1-0.2 mL/h并2 min复评，必要时再加0.1 mL/h; 原文摘录:\"use small titratable steps with frequent reassessment\" [M10 | 术中相关章节: Intraoperative hypotension | p.1498]。\n"
+        "【决策干预（VitalDB）】：将同类循环支持药物小步调整至0.1-0.2 mL/h。\n"
         "### End Example\n"
     ),
 }
@@ -826,6 +855,7 @@ class MillerRetriever:
     doc_freqs: Dict[str, int]
     doc_lengths: np.ndarray
     avg_doc_length: float
+    page_chapter_map: Dict[str, Dict[str, str]]
 
     def search(self, query_embedding: np.ndarray, top_k: int) -> List[Dict[str, Any]]:
         if self.embeddings.size == 0 or not self.passages:
@@ -912,6 +942,63 @@ def first_valid(row: pd.Series, keys: Sequence[str], default: Any = "Unknown") -
     return default
 
 
+def _to_snapshot_scalar(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, (np.floating, float)):
+        if np.isnan(value):
+            return None
+        return float(value)
+    if isinstance(value, (np.integer, int)):
+        return int(value)
+    if isinstance(value, (np.bool_, bool)):
+        return bool(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text or text.lower() == "nan":
+            return None
+        return text
+    text = str(value).strip()
+    if not text or text.lower() == "nan":
+        return None
+    return text
+
+
+def _collect_row_fields(row: pd.Series, keys: Sequence[str]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    for key in keys:
+        if key not in row:
+            continue
+        value = _to_snapshot_scalar(row[key])
+        if value is None:
+            continue
+        out[str(key)] = value
+    return out
+
+
+def _collect_row_prefixed_fields(row: pd.Series, prefixes: Sequence[str]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    for key in row.index:
+        key_text = str(key)
+        if not any(key_text.startswith(pref) for pref in prefixes):
+            continue
+        value = _to_snapshot_scalar(row[key])
+        if value is None:
+            continue
+        out[key_text] = value
+    return out
+
+
+def _collect_row_all_valid_fields(row: pd.Series) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    for key in row.index:
+        value = _to_snapshot_scalar(row[key])
+        if value is None:
+            continue
+        out[str(key)] = value
+    return out
+
+
 def _normalize_embeddings(arr: np.ndarray) -> np.ndarray:
     if arr.size == 0:
         return arr.astype(np.float32)
@@ -927,6 +1014,39 @@ def _coerce_text(value: Any) -> str:
     if isinstance(value, str):
         return value.strip()
     return str(value).strip()
+
+
+def _normalize_page_key(value: Any) -> str:
+    raw = _coerce_text(value)
+    if not raw:
+        return ""
+    try:
+        return str(int(float(raw)))
+    except Exception:
+        return raw
+
+
+def _normalize_chapter_metadata(chapter: str, section: str) -> Tuple[str, str]:
+    chapter_clean = re.sub(r"\s+", " ", _coerce_text(chapter)).strip(" .;,-")
+    section_clean = re.sub(r"\s+", " ", _coerce_text(section)).strip(" .;,-")
+
+    # Trim trailing body text accidentally attached after page numbers.
+    chapter_clean = re.sub(r"\s+\d{2,4}\s+.*$", "", chapter_clean).strip(" .;,-")
+    section_clean = re.sub(r"\s+\d{2,4}\s+.*$", "", section_clean).strip(" .;,-")
+
+    # Reject obviously invalid "chapter numbers" from body-line noise.
+    m = re.match(r"^\s*(\d{1,4})\b", chapter_clean)
+    if m:
+        num = int(m.group(1))
+        if num > 150:
+            chapter_clean = ""
+
+    if chapter_clean.endswith("-"):
+        chapter_clean = chapter_clean[:-1].strip()
+    if section_clean.endswith("-"):
+        section_clean = section_clean[:-1].strip()
+
+    return chapter_clean, section_clean
 
 
 def _pick_first_nonempty(row: Dict[str, Any], keys: Sequence[str]) -> str:
@@ -958,6 +1078,60 @@ def _infer_chapter_from_text(text: str) -> Tuple[str, str]:
     return "", ""
 
 
+def _build_page_chapter_map(passages: Sequence[Dict[str, Any]]) -> Dict[str, Dict[str, str]]:
+    per_page: Dict[str, Counter] = {}
+    for item in passages:
+        if not isinstance(item, dict):
+            continue
+        page_key = _normalize_page_key(item.get("page") or item.get("page_no") or item.get("page_index"))
+        if not page_key:
+            continue
+
+        chapter = _pick_first_nonempty(item, ["chapter", "chapter_title", "chapter_name", "chapter_id"])
+        section = _pick_first_nonempty(item, ["section", "section_title", "section_name"])
+        if not chapter:
+            infer_num, infer_title = _infer_chapter_from_text(item.get("text"))
+            if infer_num and infer_title:
+                chapter = f"{infer_num} {infer_title}"
+                section = section or infer_title
+            elif infer_num:
+                chapter = infer_num
+        chapter, section = _normalize_chapter_metadata(chapter, section)
+        if not chapter and not section:
+            continue
+        if page_key not in per_page:
+            per_page[page_key] = Counter()
+        per_page[page_key][(chapter, section)] += 1
+
+    page_map: Dict[str, Dict[str, str]] = {}
+    for page_key, counter in per_page.items():
+        if not counter:
+            continue
+        (chapter, section), _ = counter.most_common(1)[0]
+        page_map[page_key] = {"chapter": chapter, "section": section}
+    return page_map
+
+
+def _apply_page_chapter_map(passages: List[Dict[str, Any]], page_map: Dict[str, Dict[str, str]]) -> None:
+    if not page_map:
+        return
+    for item in passages:
+        if not isinstance(item, dict):
+            continue
+        page_key = _normalize_page_key(item.get("page") or item.get("page_no") or item.get("page_index"))
+        if not page_key or page_key not in page_map:
+            continue
+        chapter = _coerce_text(item.get("chapter"))
+        section = _coerce_text(item.get("section"))
+        mapped = page_map.get(page_key, {})
+        mapped_chapter = _coerce_text(mapped.get("chapter"))
+        mapped_section = _coerce_text(mapped.get("section"))
+        if not chapter and mapped_chapter:
+            item["chapter"] = mapped_chapter
+        if not section and mapped_section:
+            item["section"] = mapped_section
+
+
 def _miller_locator_parts(item: Dict[str, Any]) -> Dict[str, Any]:
     chapter = _pick_first_nonempty(item, ["chapter", "chapter_title", "chapter_name", "chapter_id"])
     section = _pick_first_nonempty(item, ["section", "section_title", "section_name"])
@@ -970,9 +1144,10 @@ def _miller_locator_parts(item: Dict[str, Any]) -> Dict[str, Any]:
     if not chapter:
         inferred_chapter, inferred_title = _infer_chapter_from_text(item.get("text"))
         if inferred_chapter:
-            chapter = inferred_chapter
+            chapter = f"{inferred_chapter} {inferred_title}".strip() if inferred_title else inferred_chapter
         if inferred_title and not section:
             section = inferred_title
+    chapter, section = _normalize_chapter_metadata(chapter, section)
     if not paragraph:
         if page_chunk_index:
             paragraph = f"p{page or '?'}_chunk{page_chunk_index}"
@@ -989,26 +1164,59 @@ def _miller_locator_parts(item: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _is_intraop_related(chapter: str, section: str, text: str = "") -> bool:
+    low = " ".join([_coerce_text(chapter), _coerce_text(section), _coerce_text(text)]).lower()
+    if not low:
+        return False
+    keywords = (
+        "intraoperative",
+        "monitor",
+        "monitoring",
+        "anesthesia",
+        "surgery",
+        "hemodynamic",
+        "oxygenation",
+        "airway",
+        "pain",
+        "nociception",
+        "术中",
+        "麻醉",
+        "监测",
+        "并发症",
+        "循环",
+        "氧合",
+    )
+    return any(k in low for k in keywords)
+
+
+def _chapter_display_name(parts: Dict[str, Any]) -> str:
+    chapter = _coerce_text(parts.get("chapter"))
+    section = _coerce_text(parts.get("section"))
+    if re.fullmatch(r"\d{1,3}", chapter) and section:
+        return section
+    if chapter:
+        return chapter
+    if section:
+        return section
+    return "章节定位不足"
+
+
+def _chapter_from_injected_prefix(text: Any) -> str:
+    src = _coerce_text(text)
+    if not src:
+        return ""
+    match = re.search(r"\[(?:书籍|Book)[^\]]*(?:章节|Chapter)\s*[:：]\s*([^,\]|]+)", src, flags=re.IGNORECASE)
+    return _coerce_text(match.group(1)) if match else ""
+
+
 def _format_miller_locator(item: Dict[str, Any], rank: Any = None) -> str:
     parts = _miller_locator_parts(item)
-    rank_text = str(rank if rank is not None else item.get("rank", "?")).strip() or "?"
-    loc_tokens = []
-    if parts["chapter"]:
-        loc_tokens.append(f"章节:{parts['chapter']}")
-    if parts["section"]:
-        loc_tokens.append(f"小节:{parts['section']}")
-    if parts["subsection"]:
-        loc_tokens.append(f"子节:{parts['subsection']}")
-    if parts["paragraph"]:
-        loc_tokens.append(f"段落:{parts['paragraph']}")
-    if parts["page"]:
-        loc_tokens.append(f"页:{parts['page']}")
-    if parts["line_no"]:
-        loc_tokens.append(f"行:{parts['line_no']}")
-    if parts["chunk_id"]:
-        loc_tokens.append(f"chunk:{parts['chunk_id']}")
-    loc_body = "; ".join(loc_tokens) if loc_tokens else "章节:未知; 段落:未知"
-    return f"[M10#{rank_text}|{loc_body}]"
+    chapter_name = _chapter_display_name(parts)
+    if chapter_name == "章节定位不足":
+        chapter_name = _chapter_from_injected_prefix(item.get("text")) or chapter_name
+    chapter_prefix = "术中相关章节" if _is_intraop_related(parts.get("chapter", ""), parts.get("section", ""), item.get("text", "")) else "相关章节"
+    page_text = _normalize_page_key(parts.get("page")) or _normalize_page_key(item.get("page")) or "?"
+    return f"[M10 | {chapter_prefix}: {chapter_name} | p.{page_text}]"
 
 
 def _tokenize_for_bm25(text: str) -> List[str]:
@@ -1107,6 +1315,12 @@ def _load_miller_corpus_chunks(cfg: PipelineConfig) -> List[Dict[str, Any]]:
                     ("page", "page"),
                     ("page_no", "page"),
                     ("page_index", "page"),
+                    ("pdf_page", "pdf_page"),
+                    ("page_label", "page_label"),
+                    ("display_locator", "display_locator"),
+                    ("locator", "display_locator"),
+                    ("chapter_source", "chapter_source"),
+                    ("chapter_confidence", "chapter_confidence"),
                 ):
                     value = _coerce_text(row.get(src_key))
                     if value and not _coerce_text(chunk.get(dst_key)):
@@ -1243,6 +1457,8 @@ def create_embedding_client(cfg: PipelineConfig) -> Any:
 
 
 def _make_miller_retriever(passages: List[Dict[str, Any]], embeddings: np.ndarray) -> MillerRetriever:
+    page_chapter_map = _build_page_chapter_map(passages)
+    _apply_page_chapter_map(passages, page_chapter_map)
     term_freqs, doc_freqs, doc_lengths, avg_doc_length = _build_bm25_state(passages)
     return MillerRetriever(
         passages=passages,
@@ -1251,6 +1467,7 @@ def _make_miller_retriever(passages: List[Dict[str, Any]], embeddings: np.ndarra
         doc_freqs=doc_freqs,
         doc_lengths=doc_lengths,
         avg_doc_length=avg_doc_length,
+        page_chapter_map=page_chapter_map,
     )
 
 
@@ -1470,11 +1687,24 @@ def build_miller_intent_tags(snapshot: Dict[str, Any], cfg: Optional[Any] = None
         _append_intent(intents, "intraoperative tachycardia")
     elif hr_now is not None and hr_now < 50.0:
         _append_intent(intents, "intraoperative bradycardia")
+
+    map_abn = map_now is not None and map_now < ANES_THRESHOLDS["map_hypotension_mmhg"]
+    hr_abn = hr_now is not None and (hr_now > ANES_THRESHOLDS["hr_tachycardia_bpm"] or hr_now < ANES_THRESHOLDS["hr_bradycardia_bpm"])
+    spo2_abn = spo2_now is not None and spo2_now < ANES_THRESHOLDS["spo2_low_pct"]
+    hemo_or_oxy_abn = map_abn or hr_abn or spo2_abn
+
     if allow_isolated_bis:
         if bis_now is not None and bis_now > 60.0:
             _append_intent(intents, "high BIS during general anesthesia")
+            if not hemo_or_oxy_abn:
+                _append_intent(intents, "isolated high BIS with stable hemodynamics")
+                _append_intent(intents, "prevention of intraoperative awareness")
+                _append_intent(intents, "hypnotic titration while preserving perfusion")
         elif bis_now is not None and bis_now < 40.0:
             _append_intent(intents, "low BIS during general anesthesia")
+            if not hemo_or_oxy_abn:
+                _append_intent(intents, "isolated low BIS with stable hemodynamics")
+                _append_intent(intents, "avoid excessive anesthetic depth")
 
     if allow_paired_bis and map_now is not None and map_now < 65.0 and bis_now is not None and bis_now > 60.0:
         _append_intent(intents, "high BIS with hypotension")
@@ -1624,23 +1854,67 @@ def build_miller_query(snapshot: Dict[str, Any], cfg: Optional[Any] = None) -> s
     hr_now = recent.get("HR_bpm")
     spo2_now = recent.get("SpO2_pct")
     bis_now = recent.get("BIS")
+    map_now_f = _safe_float(map_now)
+    hr_now_f = _safe_float(hr_now)
+    spo2_now_f = _safe_float(spo2_now)
+    bis_now_f = _safe_float(bis_now)
     anchor = snapshot.get("anchor_detail", {}) if isinstance(snapshot.get("anchor_detail"), dict) else {}
     med_key = _coerce_text(anchor.get("medication_key"))
     intervention_type = _coerce_text(snapshot.get("interpreted_intervention_type"))
     intents, rewritten = rewrite_miller_query(snapshot, cfg=cfg)
+    bis_mode = str(getattr(cfg, "miller_bis_intent_mode", "paired_only") or "paired_only").strip().lower()
+    if bis_mode not in {"full", "paired_only", "off"}:
+        bis_mode = "paired_only"
+
+    map_abn = map_now_f is not None and map_now_f < ANES_THRESHOLDS["map_hypotension_mmhg"]
+    hr_abn = hr_now_f is not None and (hr_now_f > ANES_THRESHOLDS["hr_tachycardia_bpm"] or hr_now_f < ANES_THRESHOLDS["hr_bradycardia_bpm"])
+    spo2_abn = spo2_now_f is not None and spo2_now_f < ANES_THRESHOLDS["spo2_low_pct"]
+    hemo_or_oxy_abn = map_abn or hr_abn or spo2_abn
+    bis_high = bis_now_f is not None and bis_now_f > ANES_THRESHOLDS["bis_light"]
+    bis_low = bis_now_f is not None and bis_now_f < ANES_THRESHOLDS["bis_deep"]
+    bis_abn = bis_high or bis_low
+    bis_coupled = bis_abn and hemo_or_oxy_abn
+    bis_isolated = bis_abn and (not hemo_or_oxy_abn)
+
+    bis_phrase = ""
+    if bis_mode != "off":
+        if bis_coupled:
+            if bis_high and hr_now_f is not None and hr_now_f > ANES_THRESHOLDS["hr_tachycardia_bpm"]:
+                bis_phrase = "high BIS with sympathetic activation under surgical stimulation, analgesic-hypnotic balance, "
+            elif bis_high:
+                bis_phrase = "high BIS coupled with physiologic instability; avoid automatic deepening before perfusion/oxygenation is secured, "
+            elif bis_low:
+                bis_phrase = "low BIS coupled with physiologic instability; assess excessive depth versus hypoperfusion, "
+        elif bis_isolated and bis_mode == "full":
+            if bis_high:
+                bis_phrase = "isolated high BIS with stable hemodynamics; prevention of intraoperative awareness and cautious hypnotic titration, "
+            elif bis_low:
+                bis_phrase = "isolated low BIS with stable hemodynamics; avoid excessive anesthetic depth, "
+
+    recent_parts: List[str] = []
+    if map_now_f is not None:
+        recent_parts.append(f"MAP {map_now} mmHg")
+    if hr_now_f is not None:
+        recent_parts.append(f"HR {hr_now} bpm")
+    if spo2_now_f is not None:
+        recent_parts.append(f"SpO2 {spo2_now}%")
+    if bis_now_f is not None:
+        recent_parts.append(f"BIS {bis_now}")
+    recent_state_text = ", ".join(recent_parts) if recent_parts else "available physiologic signals not provided"
+
     return (
         "Perioperative anesthesia evidence retrieval query: "
         f"{age}-year-old {sex}, ASA {asa}, department {department}, surgery group {surgery_group}, "
         f"undergoing {surgery}. Current stage: {stage}. "
         f"Preoperative context: {ctx_text}. "
-        f"Recent mean physiologic state: MAP {map_now} mmHg, HR {hr_now} bpm, SpO2 {spo2_now}%, BIS {bis_now}. "
+        f"Recent mean physiologic state: {recent_state_text}. "
         f"Risk flags: {risk_text}. "
         f"Clinical interpretation: {interp_text}. "
         f"Intent tags: {'; '.join(intents)}. "
         f"Rewritten retrieval focus: {rewritten}. "
-        f"Observed action anchor: medication key {med_key}, intervention type {intervention_type}. "
+        f"Candidate intervention context for retrieval disambiguation: medication key {med_key}, intervention type {intervention_type}; prioritize physiologic evidence first. "
         "Retrieve the most relevant Miller anesthesia evidence on anesthetic depth adjustment, analgesic titration, "
-        "hemodynamic safety thresholds, perfusion-first priority, oxygenation-first priority, BIS interpretation, "
+        f"hemodynamic safety thresholds, perfusion-first priority, oxygenation-first priority, {bis_phrase}"
         "and medication choice for this physiologic scenario."
     )
 
@@ -1661,6 +1935,7 @@ def retrieve_miller_context(
             ranked["rank"] = rank
             ranked["text"] = _coerce_text(ranked.get("text"))[: cfg.miller_max_passage_chars]
             ranked["retrieval_methods"] = ["bm25"]
+            ranked["display_locator"] = _format_miller_locator(ranked, rank=rank)
             hits.append(ranked)
         return {
             "query": query_rewritten,
@@ -1750,9 +2025,11 @@ def retrieve_miller_context(
     for rank, item in enumerate(hits, start=1):
         item["text"] = _coerce_text(item.get("text"))[: cfg.miller_max_passage_chars]
         item["rank"] = rank
+        item["display_locator"] = _format_miller_locator(item, rank=rank)
     for bucket in (bm25_hits[: cfg.miller_top_k], dense_hits[: cfg.miller_top_k]):
         for item in bucket:
             item["text"] = _coerce_text(item.get("text"))[: cfg.miller_max_passage_chars]
+            item["display_locator"] = _format_miller_locator(item, rank=item.get("rank"))
     return {
         "query": query_rewritten,
         "query_raw": query_raw,
@@ -1832,8 +2109,13 @@ def _build_miller_retrieval_log_record(
                 "subsection": locator_parts.get("subsection"),
                 "paragraph": locator_parts.get("paragraph"),
                 "page": locator_parts.get("page"),
+                "pdf_page": item.get("pdf_page"),
+                "page_label": item.get("page_label"),
+                "chapter_source": item.get("chapter_source"),
+                "chapter_confidence": item.get("chapter_confidence"),
                 "line_no": locator_parts.get("line_no"),
                 "locator": _format_miller_locator(item, rank=item.get("rank")),
+                "display_locator": _coerce_text(item.get("display_locator")) or _format_miller_locator(item, rank=item.get("rank")),
                 "fusion_score": item.get("fusion_score"),
                 "bm25_rank": item.get("bm25_rank"),
                 "dense_rank": item.get("dense_rank"),
@@ -1873,8 +2155,13 @@ def _iter_miller_retrieval_csv_rows(log_record: Dict[str, Any]) -> List[Dict[str
                 "subsection": item.get("subsection"),
                 "paragraph": item.get("paragraph"),
                 "page": item.get("page"),
+                "pdf_page": item.get("pdf_page"),
+                "page_label": item.get("page_label"),
+                "chapter_source": item.get("chapter_source"),
+                "chapter_confidence": item.get("chapter_confidence"),
                 "line_no": item.get("line_no"),
                 "locator": item.get("locator"),
+                "display_locator": item.get("display_locator"),
                 "fusion_score": item.get("fusion_score"),
                 "bm25_rank": item.get("bm25_rank"),
                 "dense_rank": item.get("dense_rank"),
@@ -2479,6 +2766,15 @@ def trend_label(slope: float) -> str:
     return "stable"
 
 
+def _format_value_with_unit(value: Any, unit: str, digits: int = 1) -> str:
+    val = _safe_float(value)
+    if val is None:
+        return "NA"
+    if not unit:
+        return f"{val:.{digits}f}"
+    return f"{val:.{digits}f} {unit}"
+
+
 def summarize_series(series: pd.Series, vital_key: Optional[str] = None) -> Optional[Dict[str, float]]:
     s = _physio_filter_series(series, key=vital_key).dropna()
     if len(s) < 10:
@@ -2504,9 +2800,14 @@ def build_trend_text(vital_key: str, summary: Optional[Dict[str, float]]) -> str
         return "insufficient valid data"
     unit = VITAL_UNIT.get(vital_key, "")
     trend = trend_label(summary["slope"])
+    start = _format_value_with_unit(summary["start"], unit)
+    end = _format_value_with_unit(summary["end"], unit)
+    mean = _format_value_with_unit(summary["mean"], unit)
+    min_v = _format_value_with_unit(summary["min"], unit)
+    max_v = _format_value_with_unit(summary["max"], unit)
     return (
-        f"from {summary['start']:.1f}{unit} {trend} to {summary['end']:.1f}{unit}; "
-        f"mean {summary['mean']:.1f}{unit}, range [{summary['min']:.1f}, {summary['max']:.1f}]"
+        f"from {start} {trend} to {end}; "
+        f"mean {mean}, range [{min_v}, {max_v}]"
     )
 
 
@@ -2940,7 +3241,23 @@ def generate_window_plot(
 
 
 def collect_preop_context(row: pd.Series) -> List[str]:
-    keys = ["dx", "opdiag", "opdiag1", "preop_dx", "comorbidity", "allergy", "lab"]
+    keys = [
+        "dx",
+        "opdiag",
+        "opdiag1",
+        "preop_dx",
+        "comorbidity",
+        "allergy",
+        "lab",
+        "department",
+        "optype",
+        "opname",
+        "approach",
+        "position",
+        "ane_type",
+        "preop_htn",
+        "preop_dm",
+    ]
     values: List[str] = []
     for k in keys:
         if k in row and is_valid(row[k]):
@@ -3053,10 +3370,66 @@ def build_snapshot(
 
     age = first_valid(row, ["age"], "Unknown")
     sex = first_valid(row, ["sex", "gender"], "Unknown")
+    height = first_valid(row, ["height", "height_cm"], "Unknown")
+    weight = first_valid(row, ["weight", "weight_kg", "wt"], "Unknown")
     bmi = first_valid(row, ["bmi"], "Unknown")
     asa = first_valid(row, ["asa"], "Unknown")
     department = first_valid(row, ["department"], "Unknown")
     opname = first_valid(row, ["opname"], "Unknown surgery")
+    optype = first_valid(row, ["optype"], "Unknown")
+    approach = first_valid(row, ["approach"], "Unknown")
+    position = first_valid(row, ["position"], "Unknown")
+    ane_type = first_valid(row, ["ane_type"], "Unknown")
+
+    clinical_source_meta = _collect_row_fields(
+        row,
+        [
+            "caseid",
+            "subjectid",
+            "source_dataset",
+            "case_id",
+            "analysis_start_time_sec",
+            "analysis_end_time_sec",
+            "analyzed_duration_sec",
+            "total_beats",
+            "rhythm_classes",
+            "ane_dur",
+        ],
+    )
+    clinical_timeline = _collect_row_fields(
+        row,
+        [
+            "casestart",
+            "caseend",
+            "anestart",
+            "aneend",
+            "opstart",
+            "opend",
+            "adm",
+            "dis",
+            "icu_days",
+            "death_inhosp",
+        ],
+    )
+    preop_metrics = _collect_row_prefixed_fields(row, ["preop_"])
+    intraop_summary = _collect_row_prefixed_fields(row, ["intraop_"])
+    airway_lines = _collect_row_fields(
+        row,
+        [
+            "cormack",
+            "airway",
+            "tubesize",
+            "dltubesize",
+            "lmasize",
+            "iv1",
+            "iv2",
+            "aline1",
+            "aline2",
+            "cline1",
+            "cline2",
+        ],
+    )
+    clinical_row_all_fields = _collect_row_all_valid_fields(row)
     baseline_comparison = build_baseline_comparison(
         df_case=df_case,
         df_window=df_window,
@@ -3083,6 +3456,8 @@ def build_snapshot(
         "patient_background": {
             "age": age,
             "sex": sex,
+            "height_cm": height,
+            "weight_kg": weight,
             "bmi": bmi,
             "asa": asa,
             "department": department,
@@ -3122,6 +3497,23 @@ def build_snapshot(
         "unit_corrections": {
             "mbp_kpa_to_mmhg_applied": bool(pd.to_numeric(df_window.get("__mbp_unit_converted__", pd.Series([0])), errors="coerce").fillna(0).max() > 0)
         },
+        "clinical_table_structured": {
+            "diagnosis_and_surgery": {
+                "dx": _to_snapshot_scalar(first_valid(row, ["dx"], "")),
+                "department": department,
+                "optype": optype,
+                "opname": opname,
+                "approach": approach,
+                "position": position,
+                "ane_type": ane_type,
+            },
+            "preop_metrics": preop_metrics,
+            "intraop_summary": intraop_summary,
+            "airway_and_lines": airway_lines,
+            "timeline": clinical_timeline,
+            "source_meta": clinical_source_meta,
+        },
+        "clinical_table_all_fields": clinical_row_all_fields,
         "waveform_image_path": image_path if image_path else "",
     }
 
@@ -3226,21 +3618,21 @@ def _question_focus_instruction(snapshot: Dict[str, Any]) -> str:
         if med_key.endswith("_RATE") and delta is not None and abs(delta) < 1.0:
             return (
                 "Question focus: this is a mild maintenance adjustment sample. "
-                "Q should ask for status evaluation plus maintenance strategy."
+                "Q should use only background + current/trend physiologic signals (no interpretation words), and ask for maintenance intervention strategy."
             )
         if med_key.endswith("_VOL") and smoothed_delta_ml is not None and smoothed_delta_ml < 1.0:
             return (
                 "Question focus: this is a mild maintenance adjustment sample. "
-                "Q should ask for status evaluation plus maintenance strategy."
+                "Q should use only background + current/trend physiologic signals (no interpretation words), and ask for maintenance intervention strategy."
             )
     if itype in {"continuous_infusion", "unlabeled_context_snapshot"}:
         return (
             "Question focus: this is a maintenance/state-assessment sample. "
-            "Q should ask for status evaluation plus maintenance strategy, not emergency rescue."
+            "Q should use only background + current/trend physiologic signals (no interpretation words), and ask for maintenance intervention strategy, not emergency rescue."
         )
     return (
         "Question focus: this is an active-decision sample. "
-        "Q should prioritize MAP/HR/SpO2 risk first, then discuss anesthesia-depth adjustment."
+        "Q should use only background + current/trend physiologic signals (no interpretation words), and ask for immediate intervention strategy."
     )
 
 
@@ -3255,7 +3647,7 @@ def _format_miller_evidence(retrieval: Optional[Dict[str, Any]]) -> str:
         f"Miller retrieval raw query:\n{query_raw}\n",
         f"Miller retrieval rewritten query:\n{query_rewritten}\n",
         f"Miller retrieval intent tags:\n{intent_text}\n",
-        "Evidence locator format to cite in output: [M10#rank|章节:...; 小节:...; 段落:...; 页:...; chunk:...]",
+        "Evidence locator format to cite in output: [M10 | 术中相关章节: ... | p.1493]",
         "Retrieved evidence excerpts from Miller's Anesthesia, 10th edition (hybrid top-k):",
     ]
     for item in retrieval["results"]:
@@ -3271,33 +3663,167 @@ def _format_miller_evidence(retrieval: Optional[Dict[str, Any]]) -> str:
     return "\n".join(blocks) + "\n\n"
 
 
+def _build_q_signal_context(snapshot: Dict[str, Any]) -> Dict[str, Any]:
+    vital_stats = snapshot.get("vital_stats", {}) if isinstance(snapshot.get("vital_stats"), dict) else {}
+    trend_key = ""
+    trend_text_block: Dict[str, Any] = {}
+    for key, value in snapshot.items():
+        if str(key).startswith("vital_trend_last_") and isinstance(value, dict):
+            trend_key = str(key).replace("vital_trend_", "")
+            trend_text_block = value
+            break
+
+    signal_order = ["MBP", "HR", "SPO2", "BIS"]
+    rename = {"MBP": "MAP", "SPO2": "SpO2"}
+    signals: Dict[str, Any] = {}
+    for vital_key in signal_order:
+        out_key = rename.get(vital_key, vital_key)
+        summary = vital_stats.get(vital_key) if isinstance(vital_stats.get(vital_key), dict) else None
+        if summary is None:
+            text = str(trend_text_block.get(vital_key, "insufficient valid data"))
+            signals[out_key] = {"trend_text": text}
+            continue
+
+        unit = VITAL_UNIT.get(vital_key, "")
+        trend = trend_label(float(summary.get("slope", 0.0)))
+        start = _format_value_with_unit(summary.get("start"), unit)
+        end = _format_value_with_unit(summary.get("end"), unit)
+        mean = _format_value_with_unit(summary.get("mean"), unit)
+        signals[out_key] = {
+            "current": end,
+            "trend": f"{start} -> {end} ({trend})",
+            "window_mean": mean,
+        }
+
+    return {
+        "trend_window": trend_key or "last_window",
+        "signals": signals,
+    }
+
+
+def _build_q_visible_context(snapshot: Dict[str, Any]) -> Dict[str, Any]:
+    patient = snapshot.get("patient_background", {}) if isinstance(snapshot.get("patient_background"), dict) else {}
+    patient_background = {
+        "age": patient.get("age", "Unknown"),
+        "sex": patient.get("sex", "Unknown"),
+        "height_cm": patient.get("height_cm", "Unknown"),
+        "weight_kg": patient.get("weight_kg", "Unknown"),
+        "bmi": patient.get("bmi", "Unknown"),
+        "asa": patient.get("asa", "Unknown"),
+        "department": patient.get("department", "Unknown"),
+        "surgery_group": patient.get("surgery_group", "Unknown"),
+    }
+    return {
+        "patient_background": patient_background,
+        "surgery_type": snapshot.get("surgery_type", ""),
+        "intraop_stage": snapshot.get("intraop_stage", ""),
+        "intraop_signal_state": _build_q_signal_context(snapshot),
+        "unit_standard": CANONICAL_UNIT_GUIDE,
+    }
+
+
+def _build_decision_support_context(snapshot: Dict[str, Any]) -> Dict[str, Any]:
+    keep_keys = [
+        "preop_context",
+        "baseline_comparison",
+        "clinical_assessment",
+        "clinical_table_structured",
+        "clinical_table_all_fields",
+        "miller_alignment",
+        "actual_intervention",
+        "interpreted_intervention_type",
+        "anchor_detail",
+        "unit_corrections",
+    ]
+    return {key: snapshot.get(key) for key in keep_keys if key in snapshot}
+
+
+def _expected_action_unit(snapshot: Dict[str, Any]) -> str:
+    anchor = snapshot.get("anchor_detail", {}) if isinstance(snapshot.get("anchor_detail"), dict) else {}
+    med_key = str(anchor.get("medication_key", "")).strip()
+    anchor_source = str(anchor.get("anchor_source", "")).strip().lower()
+    itype = str(snapshot.get("interpreted_intervention_type", "")).strip()
+    if not itype:
+        itype = str(anchor.get("intervention_type", "")).strip()
+
+    if med_key in {"ARR_EVENT", "UNLABELED_EVENT"} or anchor_source in {"arrdb", "periodic"}:
+        return ""
+    if med_key in {"SEVO_ET_RATE", "SEVO_FI_RATE", "DES_ET_RATE", "DES_FI_RATE", "ISO_ET_RATE", "ISO_FI_RATE"}:
+        return "vol%"
+    if med_key == "MAC_RATE":
+        return "MAC"
+    if itype == "bolus_like_event":
+        return "mL"
+    if med_key.endswith("_VOL"):
+        smoothed_rate = _safe_float(anchor.get("smoothed_rate_ml_per_h"))
+        if smoothed_rate is not None and smoothed_rate >= 0 and itype in {"continuous_infusion", "rate_adjustment"}:
+            return "mL/h"
+        return "mL"
+    if med_key.endswith("_RATE"):
+        return "mL/h"
+    return ""
+
+
+def _extract_question_line(text: str) -> str:
+    out = _extract_qa_block(text)
+    lines = [line.strip() for line in out.splitlines() if line.strip()]
+    if not lines:
+        return ""
+    if lines[0].startswith("Q:"):
+        return lines[0][2:].strip()
+    if lines[0].startswith("Q："):
+        return lines[0][2:].strip()
+    return lines[0].strip()
+
+
+def _has_subjective_hints_in_q(text: str) -> bool:
+    q_line = _extract_question_line(text)
+    if not q_line:
+        return True
+    for pattern in Q_SUBJECTIVE_HINT_PATTERNS:
+        if re.search(pattern, q_line, flags=re.IGNORECASE):
+            return True
+    return False
+
+
+def _q_has_intervention_question(text: str) -> bool:
+    q_line = _extract_question_line(text)
+    if not q_line:
+        return False
+    has_question_mark = ("?" in q_line) or ("？" in q_line)
+    has_intervention_word = ("干预" in q_line) or ("措施" in q_line) or ("处理" in q_line)
+    return has_question_mark and has_intervention_word
+
+
 def build_user_prompt(snapshot: Dict[str, Any], retrieval: Optional[Dict[str, Any]] = None) -> str:
-    snap_text = json.dumps(snapshot, ensure_ascii=False, indent=2)
+    snapshot_json = json.dumps(snapshot, ensure_ascii=False, indent=2)
     fewshot = _fewshot_text_for_snapshot(snapshot)
     golden = _golden_action_hint(snapshot)
     med_key = golden["medication_key"]
     actual = golden["actual_intervention"]
     kws = golden["keywords"]
     kw_text = ", ".join(kws) if kws else "N/A"
+    expected_unit = _expected_action_unit(snapshot)
+    target_value = _expected_action_numeric(snapshot)
+    target_hint = ""
+    if expected_unit and target_value is not None:
+        target_hint = f"- target logged_action numeric reference: {target_value:.2f} {expected_unit}\n"
     q_focus = _question_focus_instruction(snapshot)
     evidence_block = _format_miller_evidence(retrieval)
-    has_evidence = bool(retrieval and isinstance(retrieval.get("results"), list) and retrieval.get("results"))
-    evidence_rule = (
-        "- 【决策干预（Miller）】必须至少包含1个证据定位标签，格式如 [M10#1|章节:...; 段落:...].\n"
-        if has_evidence
-        else "- 若无检索证据，仍保持三段格式，并在【决策干预（Miller）】中写明“证据定位不足”。\n"
-    )
     return (
-        "Below is a real OR monitoring snapshot in structured JSON:\n"
-        f"{snap_text}\n\n"
-        f"{fewshot}\n"
+        "User Prompt：Below is a real OR monitoring snapshot in structured JSON:\n"
+        f"{snapshot_json}\n\n"
+        f"{fewshot}\n\n"
         f"{evidence_block}"
         "Supervision policy for this dataset:\n"
         f"- logged_action (golden): {actual}\n"
         f"- medication_key: {med_key}\n"
         f"- expected drug keywords: {kw_text}\n"
-        "You MUST align 【决策干预（VitalDB）】 with logged_action (same drug class/category). "
-        "Do not output a contradictory drug.\n"
+        f"{target_hint}"
+        "You MUST align 【决策干预（VitalDB）】 with logged_action (same drug class/category). Do not output a contradictory drug.\n"
+        "【决策干预（VitalDB）】必须对照logged_action生成：药物/方向/核心数值/单位需与logged_action一致；不得无依据改动数值。\n"
+        "若logged_action未提供复评时间、复评指标或下一步条件，【决策干预（VitalDB）】不得自行补写这些内容。\n"
+        "【决策干预（VitalDB）】最终文本禁止出现“logged_action/actual_intervention/golden/与记录一致/对照记录”等解释性元话术，只保留可执行临床指令。\n"
         f"{q_focus}\n"
         "Clinical priority policy:\n"
         "- MAP absolute threshold is the perfusion floor; relative MAP drop is layered risk stratification.\n"
@@ -3305,21 +3831,27 @@ def build_user_prompt(snapshot: Dict[str, Any], retrieval: Optional[Dict[str, An
         "- 【决策干预（Miller）】 MUST be grounded primarily in the retrieved excerpts from Miller's Anesthesia, 10th edition, when such excerpts are provided.\n"
         "- Do not present generic anesthesia knowledge as if it were a Miller 10th edition recommendation unless it is supported by the retrieved excerpts.\n"
         "- If retrieved Miller evidence is incomplete or ambiguous, explicitly stay conservative and fall back to objective physiologic signals in the snapshot.\n"
-        f"{evidence_rule}"
+        "- 【决策干预（Miller）】必须严格遵循 诊断依据：...; 具体干预：...; 原文摘录:... 的模板结构。\n"
+        "    - 诊断依据: 必须基于当前患者客观生理信息（至少包含MAP/HR/SpO2/BIS中的可用项及其近期趋势），不得空泛。\n"
+        "    - 具体干预: 必须输出根据Miller推测出的、最符合患者当前情况的具体干预行动（必须包含具体的用药和用药剂量）。若执行单位为mL/h，优先给出目标泵速范围（如31.6-35 mL/h），增量（如+0.1-0.2 mL/h）只能作补充。\n"
+        "    - 具体干预中的复评闭环: 必须写明复评时间 + 复评指标（至少2项，如BIS/MAP/HR）+ 复评后下一步条件（如“若...则...”）。\n"
+        "    - 原文摘录: 必须直接来自检索证据原文（尽量保留英文原句关键短语），不要只写概述，并在结尾处附上证据定位标签，格式如 [M10 | 术中相关章节: ... | p.1493]。\n"
+        "- 【决策干预（Miller）】与【决策干预（VitalDB）】中的用药剂量单位必须统一（例如：若Miller给出 μg/kg/min，请在具体干预中将其换算或备注为与 VitalDB 相同的 mg/kg/h 或 mL/h 格式，以确保两者可直接对比）。警告：若因snapshot缺失患者体重或药物浓度数据导致无法精确换算，请保留各自原始单位并简要注明无法换算的原因，严禁凭空捏造数据进行数学计算。\n\n"
         "You MUST output EXACTLY ONE QA pair in Chinese with this strict format:\n\n"
-        "Q: <描述病人背景、术中阶段、体征趋势的流畅段落，最后提问最合理的药理干预>\n"
-        "A: 【临床推理】：<精炼总结核心病理生理机制>\n"
-        "【决策干预（Miller）】：<基于第十版米勒麻醉学检索证据的建议，必须写出证据定位如[M10#1|章节:...; 段落:...]>\n"
-        "【决策干预（VitalDB）】：<与logged_action一致的实际策略，不得与golden冲突>\n\n"
+        "Q: 描述病人背景、术中阶段、体征趋势的流畅段落, 最后提问“结合手术背景，此时最合理的干预措施是什么？”。严禁在问题中包含任何临床推断、病理状态评价（如“显示麻醉深度不足”、“循环稳定”等）或暗示性词汇\n"
+        "A: 【临床推理】：精炼总结核心病理生理机制\n"
+        "【决策干预（Miller）】：诊断依据：<基于当前客观体征与趋势>; 具体干预：<基于第十版米勒麻醉学检索证据的建议，包含具体用药和用药剂量 + 复评时间 + 复评指标 + 若...则...的后续条件>; 原文摘录：<尽量保留英文原句关键短语，给出证据定位[M10 | 术中相关章节: ... | p.1493]>\n"
+        "【决策干预（VitalDB）】：<给出药物+方向+核心数值+单位的实际策略；无复评信息时不补写复评>\n\n"
         "The final QA block MUST be exactly these 4 lines (one line per label), no extra lines before or after.\n"
         "Use labels exactly as: Q:, A:, 【临床推理】, 【决策干预（Miller）】, 【决策干预（VitalDB）】.\n"
         "Do not change brackets, punctuation, or label names.\n"
+        "In final QA text, do NOT mention logged_action/actual_intervention/golden or any meta alignment explanation.\n"
         "If BIS data is missing, evaluate anesthesia depth indirectly using autonomic signs "
         "(HR, MBP trends) and surgical stimulation context.\n"
         "Use 'clinical_assessment.risk_flags', 'contextual_interpretation', "
         "'baseline_comparison', and 'drug_reference' to improve realism.\n"
         "Do not output any text outside the final QA pair.\n"
-        "Forbidden: instruction echo, Analyze/Strategy/Constraint Check, bullet list, self-correction text."
+        "Forbidden: instruction echo, Analyze/Strategy/Constraint Check, bullet list, self-correction text, subjective clinical interpretation/hints in Q."
     )
     
 def _clean_raw_output(text: str) -> str:
@@ -3328,6 +3860,40 @@ def _clean_raw_output(text: str) -> str:
     out = re.sub(r"\s*```$", "", out)
     out = out.replace("\r\n", "\n").strip()
     return out
+
+
+def _strip_vitaldb_meta_phrases(text: str) -> str:
+    if not text:
+        return text
+    out = text
+    idx = out.rfind("VitalDB")
+    if idx < 0:
+        return text
+    colon_pos = out.find("：", idx)
+    if colon_pos < 0:
+        colon_pos = out.find(":", idx)
+    if colon_pos < 0:
+        return text
+
+    prefix = out[: colon_pos + 1]
+    body = out[colon_pos + 1 :].strip()
+    body = re.sub(
+        r"[（(][^）)]*(?:logged_action|actual_intervention|golden|记录|对照)[^）)]*[）)]",
+        "",
+        body,
+        flags=re.IGNORECASE,
+    )
+    body = re.sub(r"按\s*logged_action\s*同类", "", body, flags=re.IGNORECASE)
+    body = re.sub(r"按\s*actual_intervention\s*同类", "", body, flags=re.IGNORECASE)
+    body = re.sub(r"严格\s*对照[^，,。；;]*", "", body, flags=re.IGNORECASE)
+    body = re.sub(r"(与|和)?(?:原始)?记录(?:动作|方向|剂量|数值|单位)?一致", "", body, flags=re.IGNORECASE)
+    body = re.sub(r"\b(?:logged_action|actual_intervention|golden)\b", "", body, flags=re.IGNORECASE)
+    body = re.sub(r"(并|且)\s*$", "", body)
+    body = re.sub(r"\s{2,}", " ", body).strip(" ，,；;。")
+    if not body:
+        body = "维持当前给药策略。"
+    return f"{prefix}{body}"
+
 
 def _extract_qa_block(text: str) -> str:
     out = _clean_raw_output(text)
@@ -3340,14 +3906,17 @@ def _extract_qa_block(text: str) -> str:
     if q_matches:
         out = out[q_matches[-1].start() :].strip()
     # Strictly extract final Q/A block.
+    # NOTE:
+    # Do not use bare "<" as a stop token, because clinical thresholds like
+    # "<65 mmHg" are common and would cause accidental truncation.
     match = re.search(
-        r"(Q\s*[:：].*?A\s*[:：].*?【决策干预.*?(?=\n\n|\n\*|\n<|<|```|$))",
+        r"(Q\s*[:：].*?A\s*[:：].*?【决策干预.*?)(?=\n\n|\n\*|\n<(?=[a-zA-Z!/])|```|$)",
         out,
         re.IGNORECASE | re.DOTALL,
     )
     if match:
-        return match.group(1).strip()
-    return out.strip()
+        return _strip_vitaldb_meta_phrases(match.group(1).strip())
+    return _strip_vitaldb_meta_phrases(out.strip())
 
 def _is_strict_qa(text: str) -> bool:
     out = _extract_qa_block(text)
@@ -3380,8 +3949,25 @@ def _is_strict_qa(text: str) -> bool:
         return False
     if not lines[3].startswith("【决策干预（VitalDB）】"):
         return False
+    if _has_subjective_hints_in_q(out):
+        return False
+    if not _q_has_intervention_question(out):
+        return False
     miller_line = lines[2]
-    has_locator = bool(re.search(r"(?i)m10\s*#\d+", miller_line)) or ("章节:" in miller_line and "段落:" in miller_line)
+    has_diag = bool(re.search(r"诊断依据\s*[:：=]", miller_line))
+    has_action = bool(re.search(r"具体干预\s*[:：=]", miller_line))
+    has_quote = bool(re.search(r"原文摘录\s*[:：=]", miller_line))
+    if not (has_diag and has_action and has_quote):
+        return False
+    has_m10 = bool(re.search(r"(?i)m10(?:\s*#\d+)?", miller_line))
+    has_page = bool(re.search(r"(?i)\bp\.\s*\d+\b", miller_line)) or ("页" in miller_line)
+    has_paragraph = bool(re.search(r"段落\s*[:：]?\s*\d+", miller_line)) or bool(
+        re.search(r"(?i)\bpara(?:graph)?\s*[:：#]?\s*\d+\b", miller_line)
+    )
+    has_chapter_hint = any(tok in miller_line for tok in ("章节", "Chapter", "相关章节"))
+    has_locator = (has_m10 and (has_page or has_paragraph or has_chapter_hint)) or (
+        has_chapter_hint and (has_page or has_paragraph)
+    )
     if not has_locator:
         return False
     return True
@@ -3406,6 +3992,257 @@ def _decision_section(text: str) -> str:
     return _decision_section_vitaldb(out)
 
 
+def _extract_miller_evidence_fields(text: str) -> Dict[str, str]:
+    dec = _decision_section(text)
+    quote = ""
+    chapter_para = ""
+
+    m_quote = re.search(r"原文摘录\s*[:：=]\s*[\"“](.*?)[\"”]", dec, re.IGNORECASE)
+    if m_quote:
+        quote = m_quote.group(1).strip()
+    else:
+        m_quote2 = re.search(r"证据原文\s*[:：=]\s*[\"“](.*?)[\"”]", dec, re.IGNORECASE)
+        if m_quote2:
+            quote = m_quote2.group(1).strip()
+
+    m_chapter = re.search(r"章节段落\s*[:：=]\s*(\[[^\]]+\]|[^；。]+)", dec, re.IGNORECASE)
+    if m_chapter:
+        chapter_para = m_chapter.group(1).strip()
+    else:
+        m_locator = re.search(r"(\[M10(?:\s*#\d+)?[^\]]*\])", dec, re.IGNORECASE)
+        if m_locator:
+            chapter_para = m_locator.group(1).strip()
+
+    return {
+        "evidence_quote": quote,
+        "chapter_paragraph": chapter_para,
+    }
+
+
+def _contains_expected_unit(text: str, unit: str) -> bool:
+    if not unit:
+        return True
+    low = text.lower()
+    if unit == "mL/h":
+        return bool(re.search(r"\bml\s*/\s*h\b", low, re.IGNORECASE))
+    if unit == "mL":
+        return bool(re.search(r"\bml\b(?!\s*/\s*h)", low, re.IGNORECASE))
+    if unit == "vol%":
+        return ("vol%" in low) or bool(re.search(r"\bvol\s*%\b", low, re.IGNORECASE))
+    if unit == "MAC":
+        return "mac" in low
+    return unit.lower() in low
+
+
+def _has_unit_unconvertible_reason(text: str) -> bool:
+    if not text:
+        return False
+    hints = (
+        "无法换算",
+        "不能换算",
+        "缺少体重",
+        "缺乏体重",
+        "无体重",
+        "缺少浓度",
+        "缺乏浓度",
+        "无药物浓度",
+        "无法精确换算",
+    )
+    return any(h in text for h in hints)
+
+
+def _extract_miller_action_clause(decision_text: str) -> str:
+    if not decision_text:
+        return ""
+    m = re.search(
+        r"具体干预\s*[:：=]\s*(.*?)(?:(?:;|；)\s*原文摘录\s*[:：=]|$)",
+        decision_text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if m:
+        return m.group(1).strip()
+    return decision_text.strip()
+
+
+def _has_explicit_dose_or_rate(action_text: str) -> bool:
+    if not action_text:
+        return False
+    return bool(
+        re.search(
+            r"\d+(?:\.\d+)?\s*(?:mL/h|mL|mg/kg/h|mg/kg/min|μg/kg/min|µg/kg/min|ug/kg/min|mcg/kg/min|mg|μg|µg|ug|mcg|vol%|MAC)",
+            action_text,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _has_explicit_drug_name(action_text: str, snapshot: Dict[str, Any]) -> bool:
+    if not action_text:
+        return False
+    low = action_text.lower()
+    hint = _golden_action_hint(snapshot)
+    kws = [str(k).strip().lower() for k in hint.get("keywords", []) if str(k).strip()]
+    if kws and any(k in low for k in kws):
+        return True
+    return bool(
+        re.search(
+            r"(丙泊酚|瑞芬太尼|去氧肾上腺素|去甲肾上腺素|麻黄碱|肾上腺素|硝酸甘油|米力农|阿托品|七氟烷|地氟烷|异氟烷|"
+            r"propofol|remifentanil|phenylephrine|norepinephrine|ephedrine|epinephrine|nitroglycerin|milrinone|atropine|sevoflurane|desflurane|isoflurane)",
+            action_text,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _extract_values_with_unit(text: str, unit: str) -> List[float]:
+    if not text or not unit:
+        return []
+    src = str(text).replace("μ", "u").replace("µ", "u")
+    if unit == "mL/h":
+        pat = r"(\d+(?:\.\d+)?)\s*m[lL]\s*/\s*h"
+    elif unit == "mL":
+        pat = r"(\d+(?:\.\d+)?)\s*m[lL](?!\s*/\s*h)"
+    elif unit == "vol%":
+        pat = r"(\d+(?:\.\d+)?)\s*(?:vol\s*%|%)"
+    elif unit == "MAC":
+        pat = r"(\d+(?:\.\d+)?)\s*MAC\b"
+    else:
+        pat = rf"(\d+(?:\.\d+)?)\s*{re.escape(unit)}"
+    vals: List[float] = []
+    for m in re.finditer(pat, src, flags=re.IGNORECASE):
+        try:
+            vals.append(float(m.group(1)))
+        except Exception:
+            continue
+    return vals
+
+
+def _expected_action_numeric(snapshot: Dict[str, Any]) -> Optional[float]:
+    unit = _expected_action_unit(snapshot)
+    if not unit:
+        return None
+    anchor = snapshot.get("anchor_detail", {}) if isinstance(snapshot.get("anchor_detail"), dict) else {}
+    if unit == "mL/h":
+        for key in ("smoothed_rate_ml_per_h", "inferred_rate_ml_per_h"):
+            v = _safe_float(anchor.get(key))
+            if v is not None and v > 0:
+                return float(v)
+    elif unit == "mL":
+        for key in ("smoothed_delta_volume_ml", "delta"):
+            v = _safe_float(anchor.get(key))
+            if v is not None:
+                return abs(float(v))
+    elif unit in {"vol%", "MAC"}:
+        v = _safe_float(anchor.get("after"))
+        if v is not None:
+            return float(v)
+
+    actual = str(snapshot.get("actual_intervention", ""))
+    vals = _extract_values_with_unit(actual, unit)
+    if vals:
+        return float(vals[0])
+    return None
+
+
+def _is_vitaldb_close_to_logged_action(text: str, snapshot: Dict[str, Any]) -> bool:
+    unit = _expected_action_unit(snapshot)
+    target = _expected_action_numeric(snapshot)
+    if not unit or target is None or target <= 0:
+        return True
+    dec = _decision_section_vitaldb(text)
+    vals = _extract_values_with_unit(dec, unit)
+    if not vals:
+        return False
+
+    best_ratio = None
+    best_diff = None
+    for v in vals:
+        ratio = max(v, target) / max(min(v, target), 1e-9)
+        diff = abs(v - target)
+        best_ratio = ratio if best_ratio is None else min(best_ratio, ratio)
+        best_diff = diff if best_diff is None else min(best_diff, diff)
+
+    if best_ratio is None or best_diff is None:
+        return False
+    if unit == "mL/h":
+        return (best_ratio <= 1.35) or (best_diff <= max(3.0, target * 0.2))
+    if unit == "mL":
+        return (best_ratio <= 1.5) or (best_diff <= max(0.5, target * 0.35))
+    if unit == "vol%":
+        return (best_ratio <= 1.4) or (best_diff <= 0.8)
+    if unit == "MAC":
+        return (best_ratio <= 1.4) or (best_diff <= 0.25)
+    return best_ratio <= 1.5
+
+
+def _is_concrete_miller_instruction(text: str, snapshot: Dict[str, Any]) -> bool:
+    expected_unit = _expected_action_unit(snapshot)
+    dec = _decision_section(text)
+    if not dec:
+        return False
+    action_clause = _extract_miller_action_clause(dec)
+    lower = action_clause.lower()
+    action_tokens = ("上调", "下调", "滴定", "追加", "减量", "增量", "维持", "暂停", "给予", "复评", "titrate", "bolus")
+    has_action = any(tok in action_clause for tok in action_tokens) or any(tok in lower for tok in action_tokens)
+    has_recheck = bool(re.search(r"\d+(?:\.\d+)?\s*(?:s|sec|秒|min|分钟)", action_clause, re.IGNORECASE)) or ("复评" in action_clause)
+    has_quant = _has_explicit_dose_or_rate(action_clause)
+    has_drug = _has_explicit_drug_name(action_clause, snapshot)
+    has_diag_kv = bool(re.search(r"诊断依据\s*[:：=]", dec))
+    has_action_kv = bool(re.search(r"具体干预\s*[:：=]", dec))
+    has_quote_kv = bool(re.search(r"原文摘录\s*[:：=]", dec))
+    if not expected_unit:
+        return has_action and has_recheck and has_quant and has_drug and has_diag_kv and has_action_kv and has_quote_kv
+    has_unit = _contains_expected_unit(action_clause, expected_unit) or _has_unit_unconvertible_reason(action_clause) or _has_unit_unconvertible_reason(dec)
+    return has_action and has_recheck and has_quant and has_drug and has_unit and has_diag_kv and has_action_kv and has_quote_kv
+
+
+def _is_unit_consistent_across_decisions(text: str, snapshot: Dict[str, Any]) -> bool:
+    expected_unit = _expected_action_unit(snapshot)
+    if not expected_unit:
+        return True
+    miller_dec = _decision_section(text)
+    miller_action = _extract_miller_action_clause(miller_dec)
+    vital_dec = _decision_section_vitaldb(text)
+    has_miller_expected = _contains_expected_unit(miller_action, expected_unit)
+    has_vital_expected = _contains_expected_unit(vital_dec, expected_unit)
+    if has_miller_expected and has_vital_expected:
+        m_vals = _extract_values_with_unit(miller_action, expected_unit)
+        v_vals = _extract_values_with_unit(vital_dec, expected_unit)
+        if not m_vals or not v_vals:
+            return True
+        best_ratio = None
+        for mv in m_vals:
+            for vv in v_vals:
+                ratio = max(mv, vv) / max(min(mv, vv), 1e-9)
+                best_ratio = ratio if best_ratio is None else min(best_ratio, ratio)
+        return (best_ratio is not None) and (best_ratio <= 3.0)
+    # Allow fallback when precise conversion is impossible and explicitly justified.
+    if _has_unit_unconvertible_reason(miller_action) or _has_unit_unconvertible_reason(vital_dec):
+        return True
+    return False
+
+
+def _extract_structured_qa_fields(qa_text: Optional[str], snapshot: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    if not qa_text or not isinstance(qa_text, str):
+        return {
+            "miller_evidence_kv": {"evidence_quote": "", "chapter_paragraph": ""},
+            "unit_consistency": {"expected_action_unit": "", "consistent": False},
+            "vitaldb_alignment": {"close_to_logged_action": False},
+        }
+    snap = snapshot if isinstance(snapshot, dict) else {}
+    expected_unit = _expected_action_unit(snap)
+    return {
+        "miller_evidence_kv": _extract_miller_evidence_fields(qa_text),
+        "unit_consistency": {
+            "expected_action_unit": expected_unit,
+            "consistent": _is_unit_consistent_across_decisions(qa_text, snap),
+        },
+        "vitaldb_alignment": {
+            "close_to_logged_action": _is_vitaldb_close_to_logged_action(qa_text, snap),
+        },
+    }
+
+
 def _is_action_aligned(text: str, snapshot: Dict[str, Any]) -> bool:
     hint = _golden_action_hint(snapshot)
     kws = [str(k).strip() for k in hint.get("keywords", []) if str(k).strip()]
@@ -3415,12 +4252,34 @@ def _is_action_aligned(text: str, snapshot: Dict[str, Any]) -> bool:
     return any(k.lower() in dec for k in kws)
 
 
+def _is_concrete_vitaldb_instruction(text: str, snapshot: Optional[Dict[str, Any]] = None) -> bool:
+    dec = _decision_section_vitaldb(text)
+    if not dec:
+        return False
+    lower = dec.lower()
+    action_tokens = ("上调", "下调", "滴定", "追加", "减量", "增量", "维持", "暂停", "给予", "复评", "titrate", "bolus")
+    has_action = any(tok in dec for tok in action_tokens) or any(tok in lower for tok in action_tokens)
+    has_recheck = bool(re.search(r"\d+(?:\.\d+)?\s*(?:s|sec|秒|min|分钟)", dec, re.IGNORECASE)) or ("复评" in dec)
+    has_quant = bool(re.search(r"\d+(?:\.\d+)?\s*(?:mL/h|mL|mmHg|bpm|%|vol%|MAC)", dec, re.IGNORECASE))
+    if snapshot is None:
+        return has_action and has_recheck and has_quant
+    expected_unit = _expected_action_unit(snapshot)
+    if not expected_unit:
+        return has_action and has_recheck and has_quant
+    return has_action and has_recheck and has_quant and (
+        _contains_expected_unit(dec, expected_unit) or _has_unit_unconvertible_reason(dec)
+    )
+
+
 def _repair_qa_output(client: Any, model: str, raw_text: str, snapshot: Dict[str, Any]) -> Optional[str]:
     hint = _golden_action_hint(snapshot)
     med_key = hint.get("medication_key", "")
     actual = hint.get("actual_intervention", "")
     kws = hint.get("keywords", [])
     kw_text = ", ".join(kws) if kws else "N/A"
+    expected_unit = _expected_action_unit(snapshot) or "N/A"
+    target_value = _expected_action_numeric(snapshot)
+    target_text = f"{target_value:.2f} {expected_unit}" if (target_value is not None and expected_unit != "N/A") else "N/A"
     repair_sys = (
         "You are a strict medical QA formatter. "
         "Return only final QA in Chinese. "
@@ -3428,16 +4287,27 @@ def _repair_qa_output(client: Any, model: str, raw_text: str, snapshot: Dict[str
     )
     repair_user = (
         "Rewrite to strict format. You MUST output EXACTLY this 4-line template:\n"
-        "Q: <一句问题>\n"
+        "Q: <只包含病人背景+术中生理信号当前值与趋势的问题，结尾询问最合理干预措施>\n"
         "A: 【临床推理】：<1-3句>\n"
-        "【决策干预（Miller）】：<1-3句，且必须包含证据定位标签如[M10#1|章节:...; 段落:...]>\n"
-        "【决策干预（VitalDB）】：<1-2句>\n\n"
+        "【决策干预（Miller）】：诊断依据：...; 具体干预：...; 原文摘录：\"...\" [M10 | 术中相关章节: ... | p.1493]\n"
+        "【决策干预（VitalDB）】：<1句；给出药物+方向+核心数值+单位，不得擅自补写复评或下一步条件>\n\n"
         "Do not output Analyze/Strategy/Constraint Check/self-correction text.\n"
         "Do not output anything outside the 4-line QA block.\n"
-        "Miller line must include at least one M10 locator token.\n"
+        "Q line must NOT include citation tags, logged_action, anchor metadata, or subjective clinical interpretation/hints.\n"
+        "Final VitalDB text must NOT mention logged_action/actual_intervention/golden/与记录一致/对照记录; keep only executable clinical action.\n"
+        "Miller 诊断依据 must cite objective physiologic signals/trends (MAP/HR/SpO2/BIS when available), not vague statements.\n"
+        "Use normalized units: MAP mmHg, HR bpm, SpO2 %, BIS index, infusion mL/h, bolus mL, volatile vol%.\n"
+        "Miller line must include at least one M10 locator token and contain all three parts: 诊断依据 + 具体干预 + 原文摘录.\n"
+        "Miller“具体干预”必须包含：明确药物名 + 数字剂量/速率 + 单位 + 复评时间 + 复评指标 + 若...则...下一步条件。\n"
+        "禁止“适度增加/小步调整/酌情”等无数值措辞。\n"
+        "若执行单位为mL/h，Miller“具体干预”优先写目标泵速（例如31.6-35 mL/h），增量只作补充，避免只写+0.1-0.2 mL/h。\n"
+        "If precise unit conversion is impossible due to missing body weight or drug concentration, keep original units and briefly explain why; never fabricate numbers.\n"
         f"Golden logged_action: {actual}\n"
         f"Golden medication_key: {med_key}\n"
         f"Expected drug keywords in 【决策干预（VitalDB）】: {kw_text}\n"
+        f"Required actionable dose/rate unit in BOTH decision lines: {expected_unit}\n"
+        f"VitalDB numeric target reference (from logged_action/anchor): {target_text}\n"
+        "【决策干预（VitalDB）】数值与单位需与上述目标值保持一致（允许仅文字改写，不允许无依据数值改动）。\n"
         "【决策干预（VitalDB）】必须与golden logged_action同药物类别，不得矛盾。\n"
         "Source text:\n"
         f"{raw_text}"
@@ -3648,13 +4518,27 @@ def generate_single_qa(
         return None
     raw = content.strip() if isinstance(content, str) else str(content).strip()
     cleaned = _extract_qa_block(raw)
-    if _is_strict_qa(cleaned) and _is_action_aligned(cleaned, snapshot):
+    if (
+        _is_strict_qa(cleaned)
+        and _is_action_aligned(cleaned, snapshot)
+        and _is_concrete_miller_instruction(cleaned, snapshot)
+        and _is_concrete_vitaldb_instruction(cleaned, snapshot)
+        and _is_unit_consistent_across_decisions(cleaned, snapshot)
+        and _is_vitaldb_close_to_logged_action(cleaned, snapshot)
+    ):
         return cleaned
 
     repaired = _repair_qa_output(client, model, raw, snapshot)
     if repaired:
         repaired_cleaned = _extract_qa_block(repaired)
-        if _is_strict_qa(repaired_cleaned) and _is_action_aligned(repaired_cleaned, snapshot):
+        if (
+            _is_strict_qa(repaired_cleaned)
+            and _is_action_aligned(repaired_cleaned, snapshot)
+            and _is_concrete_miller_instruction(repaired_cleaned, snapshot)
+            and _is_concrete_vitaldb_instruction(repaired_cleaned, snapshot)
+            and _is_unit_consistent_across_decisions(repaired_cleaned, snapshot)
+            and _is_vitaldb_close_to_logged_action(repaired_cleaned, snapshot)
+        ):
             return repaired_cleaned
 
     # Fail fast: do not keep polluted draft text in final dataset.
@@ -3732,6 +4616,7 @@ def stage3_generate_qa(records: List[Dict[str, Any]], cfg: PipelineConfig) -> No
                     val_checked += 1
                     if _skip_after_actual_validation(meta, cfg):
                         rec["llm_output"] = None
+                        rec.update(_extract_structured_qa_fields(None, rec.get("snapshot", {})))
                         val_skipped += 1
                         f.write(_safe_json_dumps(rec) + "\n")
                         continue
@@ -3765,6 +4650,7 @@ def stage3_generate_qa(records: List[Dict[str, Any]], cfg: PipelineConfig) -> No
                     rec["snapshot"],
                     retrieval=retrieval,
                 )
+                rec.update(_extract_structured_qa_fields(rec.get("llm_output"), rec.get("snapshot", {})))
                 f.write(_safe_json_dumps(rec) + "\n")
         if cfg.validate_actual_before_qa:
             print(f"  - actual validation: checked={val_checked}, kept={val_kept}, skipped={val_skipped}")
@@ -3834,6 +4720,7 @@ def stage3_generate_qa(records: List[Dict[str, Any]], cfg: PipelineConfig) -> No
         for fut in as_completed(futures):
             idx, qa, meta, retrieval = fut.result()
             records[idx]["llm_output"] = qa
+            records[idx].update(_extract_structured_qa_fields(qa, records[idx].get("snapshot", {})))
             if retrieval is not None:
                 records[idx]["miller_retrieval"] = retrieval
                 if retrieval_f is not None:
@@ -4260,6 +5147,14 @@ def _record_has_trainable_qa(rec: Dict[str, Any]) -> bool:
     snap = rec.get("snapshot")
     if isinstance(snap, dict) and not _is_action_aligned(cleaned, snap):
         return False
+    if isinstance(snap, dict) and not _is_concrete_miller_instruction(cleaned, snap):
+        return False
+    if not _is_concrete_vitaldb_instruction(cleaned, snap if isinstance(snap, dict) else None):
+        return False
+    if isinstance(snap, dict) and not _is_unit_consistent_across_decisions(cleaned, snap):
+        return False
+    if isinstance(snap, dict) and not _is_vitaldb_close_to_logged_action(cleaned, snap):
+        return False
     return True
 
 
@@ -4531,7 +5426,16 @@ def clean_jsonl_file(
                 valid = _is_strict_qa(cleaned)
                 if valid and enforce_action_alignment and isinstance(rec.get("snapshot"), dict):
                     valid = _is_action_aligned(cleaned, rec.get("snapshot", {}))
+                if valid:
+                    snap = rec.get("snapshot", {}) if isinstance(rec.get("snapshot"), dict) else {}
+                    valid = (
+                        _is_concrete_miller_instruction(cleaned, snap)
+                        and _is_concrete_vitaldb_instruction(cleaned, snap)
+                        and _is_unit_consistent_across_decisions(cleaned, snap)
+                        and _is_vitaldb_close_to_logged_action(cleaned, snap)
+                    )
                 rec[field] = cleaned
+                rec.update(_extract_structured_qa_fields(cleaned, rec.get("snapshot", {})))
                 if valid:
                     strict_ok += 1
                 elif drop_invalid:

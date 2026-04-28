@@ -1,8 +1,9 @@
 import argparse
 import json
+import re
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
@@ -11,9 +12,8 @@ from anes_pipeline import (
     _decision_section,
     _decision_section_vitaldb,
     _extract_qa_block,
-    _golden_action_hint,
     _is_action_aligned,
-    _is_strict_qa,
+    _is_unit_consistent_across_decisions,
     build_miller_retriever,
     build_user_prompt,
     create_embedding_client,
@@ -63,7 +63,10 @@ def _build_retrieval_cfg(args: argparse.Namespace) -> Any:
         miller_index_path=args.miller_index_path,
         miller_top_k=max(1, min(5, int(args.miller_top_k))),
         miller_chunk_chars=max(300, int(args.miller_chunk_chars)),
-        miller_chunk_overlap_chars=max(0, min(int(args.miller_chunk_overlap_chars), max(299, int(args.miller_chunk_chars) - 1))),
+        miller_chunk_overlap_chars=max(
+            0,
+            min(int(args.miller_chunk_overlap_chars), max(299, int(args.miller_chunk_chars) - 1)),
+        ),
         miller_max_passage_chars=max(200, int(args.miller_max_passage_chars)),
         embedding_backend=args.embedding_backend,
         embedding_model=args.embedding_model,
@@ -78,17 +81,20 @@ def _build_retrieval_cfg(args: argparse.Namespace) -> Any:
 
 
 def _build_headers(api_key: str) -> Dict[str, str]:
-    headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-    }
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
     key = api_key.strip()
     if key:
         headers["Authorization"] = f"Bearer {key}"
     return headers
 
 
-def _post_chat(url: str, headers: Dict[str, str], model: str, user_prompt: str, max_tokens: int) -> str:
+def _post_chat(
+    url: str,
+    headers: Dict[str, str],
+    model: str,
+    user_prompt: str,
+    max_tokens: int,
+) -> Tuple[str, str]:
     payload = {
         "model": model,
         "messages": [
@@ -101,57 +107,133 @@ def _post_chat(url: str, headers: Dict[str, str], model: str, user_prompt: str, 
     resp = requests.post(url, headers=headers, json=payload, timeout=300)
     resp.raise_for_status()
     obj = resp.json()
-    return str(obj["choices"][0]["message"]["content"]).strip()
+    choice = obj["choices"][0]
+    content = str(choice["message"]["content"]).strip()
+    finish_reason = str(choice.get("finish_reason", "")).strip().lower()
+    return content, finish_reason
 
 
-def _repair_via_requests(
-    url: str,
-    headers: Dict[str, str],
-    model: str,
-    raw_text: str,
-    snapshot: Dict[str, Any],
-    max_tokens: int,
-) -> Optional[str]:
-    hint = _golden_action_hint(snapshot)
-    med_key = hint.get("medication_key", "")
-    actual = hint.get("actual_intervention", "")
-    kws = hint.get("keywords", [])
-    kw_text = ", ".join(kws) if kws else "N/A"
-    repair_sys = (
-        "You are a medical text formatter. "
-        "Return only final QA in Chinese. "
-        "No thinking process, no bullets, no instruction echo."
-    )
-    repair_user = (
-        "Rewrite to strict format. Output only:\n"
-        "Q: ...\n"
-        "A: 【临床推理】：...\n"
-        "【决策干预（Miller）】：...\n"
-        "【决策干预（VitalDB）】：...\n\n"
-        "Do not output Analyze/Strategy/Constraint Check/self-correction text.\n"
-        f"Golden logged_action: {actual}\n"
-        f"Golden medication_key: {med_key}\n"
-        f"Expected drug keywords in 【决策干预（VitalDB）】: {kw_text}\n"
-        "【决策干预（VitalDB）】必须与golden logged_action同药物类别，不得矛盾。\n"
-        "Source text:\n"
-        f"{raw_text}"
-    )
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": repair_sys},
-            {"role": "user", "content": repair_user},
-        ],
-        "max_tokens": max_tokens,
-        "temperature": 0.0,
+def _acceptance_flags(qa_text: Optional[str], snapshot: Dict[str, Any]) -> Dict[str, bool]:
+    if not isinstance(qa_text, str) or not qa_text.strip():
+        return {"aligned": False, "unit": False}
+    return {
+        "aligned": _is_action_aligned(qa_text, snapshot),
+        "unit": _is_unit_consistent_across_decisions(qa_text, snapshot),
     }
-    try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=300)
-        resp.raise_for_status()
-        obj = resp.json()
-        return str(obj["choices"][0]["message"]["content"]).strip()
-    except Exception:
+
+
+def _has_miller_locator(text: Optional[str]) -> bool:
+    if not isinstance(text, str) or not text.strip():
+        return False
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if len(lines) < 3:
+        return False
+    miller_line = lines[2]
+    if re.search(r"\[M10(?:\s*#\d+)?[^\]]*\]", miller_line, re.IGNORECASE):
+        return True
+    # Also treat locator without M10 index as valid, e.g. [M10 | 术中相关章节: ... | p.1974]
+    has_chapter = bool(re.search(r"(术中相关章节|相关章节|chapter)\s*:", miller_line, re.IGNORECASE))
+    has_page = bool(re.search(r"\bp\.\s*\d+\b", miller_line, re.IGNORECASE))
+    return has_chapter and has_page
+
+
+def _best_locator_from_retrieval(retrieval: Optional[Dict[str, Any]]) -> str:
+    if not isinstance(retrieval, dict):
+        return ""
+    for key in ("results", "bm25_results", "dense_results"):
+        vals = retrieval.get(key)
+        if not isinstance(vals, list):
+            continue
+        for item in vals:
+            if not isinstance(item, dict):
+                continue
+            loc = str(item.get("display_locator", "")).strip()
+            if loc:
+                return loc
+    return ""
+
+
+def _force_append_miller_locator(text: str, locator: str) -> str:
+    if not text or not locator:
+        return text
+    out = _extract_qa_block(text)
+    lines = [ln for ln in out.splitlines()]
+    if len(lines) < 4:
+        return out
+    if _has_miller_locator("\n".join(lines[:4])):
+        return out
+    sep = "" if lines[2].rstrip().endswith(("\u3002", "\uff1b", ";")) else " "
+    lines[2] = f"{lines[2].rstrip()}{sep}{locator}"
+    return "\n".join(lines).strip()
+
+
+def _strip_m10_index_token(text: Optional[str]) -> Optional[str]:
+    if not isinstance(text, str) or not text.strip():
+        return text
+    out = text
+    # [M10#3 | ...] -> [M10 | ...]
+    out = re.sub(r"\[\s*M10#\d+\s*\|\s*", "[M10 | ", out, flags=re.IGNORECASE)
+    # Fallback: M10#3 | ... -> M10 | ...
+    out = re.sub(r"\bM10#\d+\s*\|\s*", "M10 | ", out, flags=re.IGNORECASE)
+    # [M10#3] -> [M10]
+    out = re.sub(r"\[\s*M10#\d+\s*\]", "[M10]", out, flags=re.IGNORECASE)
+    return out
+
+
+def _strip_vitaldb_meta_phrases(text: Optional[str]) -> Optional[str]:
+    if not isinstance(text, str) or not text.strip():
+        return text
+    out = text
+    m = re.search(r"(【决策干预（VitalDB）】[:：]\s*)(.*)$", out, re.IGNORECASE | re.DOTALL)
+    if not m:
+        return out
+
+    prefix = m.group(1)
+    body = m.group(2).strip()
+
+    # Remove prompt/meta leakage phrases while keeping clinical action text.
+    body = re.sub(
+        r"[（(][^）)]*(?:logged_action|actual_intervention|golden|记录|对照)[^）)]*[）)]",
+        "",
+        body,
+        flags=re.IGNORECASE,
+    )
+    body = re.sub(r"按\s*logged_action\s*同类", "", body, flags=re.IGNORECASE)
+    body = re.sub(r"按\s*actual_intervention\s*同类", "", body, flags=re.IGNORECASE)
+    body = re.sub(r"严格\s*对照[^，,。；;]*", "", body, flags=re.IGNORECASE)
+    body = re.sub(r"(与|和)?(?:原始)?记录(?:动作|方向|剂量|数值|单位)?一致", "", body, flags=re.IGNORECASE)
+    body = re.sub(r"(?:logged_action|actual_intervention|golden)", "", body, flags=re.IGNORECASE)
+    body = re.sub(r"(并|且)\s*$", "", body)
+    body = re.sub(r"\s{2,}", " ", body).strip(" ，,；;。")
+    if not body:
+        body = "维持当前给药策略。"
+
+    return f"{out[:m.start(1)]}{prefix}{body}"
+
+
+def _normalize_to_four_lines(text: Optional[str]) -> Optional[str]:
+    if not isinstance(text, str) or not text.strip():
         return None
+    out = _extract_qa_block(text).replace("\r\n", "\n").strip()
+    # Rules-only normalization: re-split into exact 4 labeled lines without rewriting content.
+    m = re.search(
+        r"Q\s*[:：]\s*(.*?)\s*A\s*[:：]\s*【临床推理】\s*[:：]\s*(.*?)\s*【决策干预（Miller）】\s*[:：]\s*(.*?)\s*【决策干预（VitalDB）】\s*[:：]\s*(.*)$",
+        out,
+        re.DOTALL,
+    )
+    if not m:
+        return _strip_vitaldb_meta_phrases(out)
+    q = m.group(1).strip()
+    reason = m.group(2).strip()
+    miller = m.group(3).strip()
+    vital = m.group(4).strip()
+    normalized = (
+        f"Q: {q}\n"
+        f"A: 【临床推理】：{reason}\n"
+        f"【决策干预（Miller）】：{miller}\n"
+        f"【决策干预（VitalDB）】：{vital}"
+    ).strip()
+    return _strip_vitaldb_meta_phrases(normalized)
 
 
 def _generate_one(
@@ -164,33 +246,53 @@ def _generate_one(
 ) -> Dict[str, Any]:
     prompt = build_user_prompt(snapshot, retrieval=retrieval)
     try:
-        raw = _post_chat(api_url, headers, model, prompt, max_tokens)
+        raw, finish_reason = _post_chat(api_url, headers, model, prompt, max_tokens)
+        if finish_reason == "length":
+            retry_tokens = min(int(max_tokens * 1.8), 4000)
+            raw_retry, finish_reason_retry = _post_chat(api_url, headers, model, prompt, retry_tokens)
+            if len(raw_retry or "") >= len(raw or ""):
+                raw = raw_retry
+                finish_reason = finish_reason_retry
     except Exception as e:  # noqa: BLE001
         return {
             "error": str(e),
             "raw_output": None,
+            "raw_finish_reason": "",
             "final_output": None,
             "valid": False,
             "miller_output": "",
             "vitaldb_output": "",
+            "acceptance_flags_raw": {},
+            "acceptance_flags_final": {},
         }
 
     cleaned = _extract_qa_block(raw)
-    final = None
-    if _is_strict_qa(cleaned) and _is_action_aligned(cleaned, snapshot):
-        final = cleaned
-    else:
-        repaired = _repair_via_requests(api_url, headers, model, raw, snapshot, max_tokens)
-        if repaired:
-            repaired_cleaned = _extract_qa_block(repaired)
-            if _is_strict_qa(repaired_cleaned) and _is_action_aligned(repaired_cleaned, snapshot):
-                final = repaired_cleaned
+    final = _normalize_to_four_lines(cleaned)
+    if not isinstance(final, str) or not final.strip():
+        final = cleaned if isinstance(cleaned, str) and cleaned.strip() else None
+
+    # Rules-only locator patch: never ask model to rewrite evidence text.
+    if final and not _has_miller_locator(final):
+        locator = _best_locator_from_retrieval(retrieval)
+        if locator:
+            final = _force_append_miller_locator(final, locator)
+
+    # User preference: keep locator content, but remove M10# index token in final output.
+    final = _strip_m10_index_token(final)
+    # Always sanitize VitalDB line from prompt/meta leakage phrases.
+    final = _strip_vitaldb_meta_phrases(final)
+
+    first_flags = _acceptance_flags(cleaned, snapshot)
+    final_flags = _acceptance_flags(final, snapshot) if final else {}
 
     return {
         "error": None,
         "raw_output": raw,
+        "raw_finish_reason": finish_reason,
         "final_output": final,
         "valid": bool(final),
+        "acceptance_flags_raw": first_flags,
+        "acceptance_flags_final": final_flags,
         "miller_output": _decision_section(final) if final else "",
         "vitaldb_output": _decision_section_vitaldb(final) if final else "",
     }
@@ -209,7 +311,7 @@ def main() -> None:
     parser.add_argument("--api-url", default="https://api2.aigcbest.top/v1/chat/completions")
     parser.add_argument("--api-key", default="", help="Bearer token for the gateway.")
     parser.add_argument("--model", required=True)
-    parser.add_argument("--max-tokens", type=int, default=700)
+    parser.add_argument("--max-tokens", type=int, default=1200)
 
     parser.add_argument("--use-existing-retrieval", action="store_true")
     parser.add_argument("--enable-miller-rag", action="store_true")
@@ -262,8 +364,12 @@ def main() -> None:
             out[f"{args.output_field}_meta"] = {
                 "valid": result.get("valid", False),
                 "error": result.get("error"),
+                "raw_finish_reason": result.get("raw_finish_reason", ""),
+                "acceptance_flags_raw": result.get("acceptance_flags_raw", {}),
+                "acceptance_flags_final": result.get("acceptance_flags_final", {}),
                 "miller_output": result.get("miller_output", ""),
                 "vitaldb_output": result.get("vitaldb_output", ""),
+                "postprocess_mode": "rule_only",
             }
             f.write(json.dumps(out, ensure_ascii=False) + "\n")
             print(f"  - GPT requests generated {idx}/{len(records)}")

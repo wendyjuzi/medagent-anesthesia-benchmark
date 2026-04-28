@@ -114,7 +114,11 @@ def _extract_json_obj(raw: str) -> Dict[str, Any]:
 
 def _has_miller_locator(text: str) -> bool:
     src = str(text or "")
-    return bool(re.search(r"(?i)m10\s*#\d+", src)) or ("章节:" in src and "段落:" in src)
+    if "未知" in src or "章节定位不足" in src:
+        return False
+    has_m10 = bool(re.search(r"(?i)m10\s*#\d+", src))
+    has_page = bool(re.search(r"(?i)\bp\.\s*\d+\b", src)) or ("页" in src)
+    return has_m10 and has_page
 
 
 def _infer_chapter_from_text(text: str) -> Tuple[str, str]:
@@ -138,19 +142,28 @@ def _infer_chapter_from_text(text: str) -> Tuple[str, str]:
 
 
 def _build_miller_locator_from_item(item: Dict[str, Any], rank_fallback: int = 1) -> str:
+    existing = str(item.get("display_locator") or item.get("locator") or "").strip()
+    if existing and "未知" not in existing and "章节定位不足" not in existing:
+        return existing
     rank = item.get("rank", rank_fallback)
     chapter = str(item.get("chapter") or "").strip()
     section = str(item.get("section") or "").strip()
     if not chapter:
         inferred_chapter, inferred_section = _infer_chapter_from_text(item.get("text"))
-        chapter = inferred_chapter or chapter
+        chapter = (f"{inferred_chapter} {inferred_section}".strip() if inferred_chapter and inferred_section else inferred_chapter) or chapter
         if not section:
             section = inferred_section
-    chapter = chapter or "未知"
-    paragraph = str(item.get("paragraph") or item.get("page_chunk_index") or item.get("chunk_id") or "").strip() or "未知"
-    if section:
-        return f"[M10#{rank}|章节:{chapter}; 小节:{section}; 段落:{paragraph}]"
-    return f"[M10#{rank}|章节:{chapter}; 段落:{paragraph}]"
+    chapter_name = chapter or section
+    if not chapter_name:
+        text = str(item.get("text") or "").strip()
+        m = re.search(r"\[(?:书籍|Book)[^\]]*(?:章节|Chapter)\s*[:：]\s*([^,\]|]+)", text, flags=re.IGNORECASE)
+        if m:
+            chapter_name = m.group(1).strip()
+    chapter_name = chapter_name or "章节定位不足"
+    if re.fullmatch(r"\d{1,3}", chapter_name) and section:
+        chapter_name = section
+    page = str(item.get("page") or item.get("page_no") or item.get("page_index") or "").strip() or "?"
+    return f"[M10#{rank} | 术中相关章节: {chapter_name} | p.{page}]"
 
 
 def _best_miller_locator(retrieval: Optional[Dict[str, Any]]) -> str:
@@ -281,6 +294,93 @@ def _miller10_hit_score(item: Dict[str, Any]) -> int:
     return score
 
 
+def _coerce_web_str(item: Dict[str, Any], keys: List[str]) -> str:
+    for key in keys:
+        value = str(item.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _coerce_web_float(item: Dict[str, Any], keys: List[str], default: float = 0.0) -> float:
+    for key in keys:
+        value = item.get(key)
+        if value in (None, ""):
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return default
+
+
+def _infer_miller_web_metadata(item: Dict[str, Any], rank: int, allow_gpt_inferred: bool = False) -> Dict[str, Any]:
+    text = " ".join(
+        str(item.get(key) or "")
+        for key in ("title", "snippet", "url")
+    )
+    chapter = _coerce_web_str(item, ["miller_chapter", "chapter", "chapter_title"])
+    section = _coerce_web_str(item, ["miller_section", "section", "section_title"])
+    page = _coerce_web_str(item, ["miller_page", "page", "page_no"])
+    model_supplied_locator = bool(chapter or section or page)
+    locator_source = _coerce_web_str(item, ["miller_locator_source", "locator_source"])
+    locator_confidence = _coerce_web_float(item, ["miller_locator_confidence", "locator_confidence"], 0.0)
+
+    if locator_source not in {"source_snippet", "inferred_by_gpt", "unknown"}:
+        locator_source = ""
+
+    if not chapter:
+        m = re.search(r"(?i)\bchapter\s*(\d{1,3})\s*[:.\-–]?\s*([^|.;\n]{3,120})", text)
+        if m:
+            chapter = f"{m.group(1).strip()} {m.group(2).strip()}"
+            if not section:
+                section = m.group(2).strip()
+            locator_source = "source_snippet"
+            locator_confidence = max(locator_confidence, 0.8)
+    if not page:
+        m = re.search(r"(?i)\b(?:p\.?|page)\s*[:.]?\s*(\d{1,4})\b", text)
+        if m:
+            page = m.group(1).strip()
+            if locator_source in {"", "unknown"}:
+                locator_source = "source_snippet"
+            locator_confidence = max(locator_confidence, 0.8)
+
+    if model_supplied_locator and not locator_source:
+        locator_source = "inferred_by_gpt" if allow_gpt_inferred else "unknown"
+        locator_confidence = locator_confidence or (0.5 if allow_gpt_inferred else 0.0)
+
+    if locator_source == "inferred_by_gpt" and not allow_gpt_inferred:
+        chapter = ""
+        section = ""
+        page = ""
+        locator_source = "unknown"
+        locator_confidence = 0.0
+
+    if not locator_source:
+        locator_source = "source_snippet" if (chapter or section or page) else "unknown"
+    if locator_source == "source_snippet" and locator_confidence <= 0:
+        locator_confidence = 0.8
+    if locator_source == "inferred_by_gpt":
+        locator_confidence = min(locator_confidence or 0.5, 0.6)
+        page = ""
+    elif locator_source == "unknown":
+        chapter = ""
+        section = ""
+        page = ""
+        locator_confidence = 0.0
+
+    chapter_display = chapter or section or "章节定位不足"
+    page_display = page or "?"
+    return {
+        "miller_chapter": chapter,
+        "miller_section": section,
+        "miller_page": page,
+        "miller_locator_source": locator_source,
+        "miller_locator_confidence": locator_confidence,
+        "miller_display_locator": f"[WebM10#{rank} | 术中相关章节: {chapter_display} | p.{page_display}]",
+    }
+
+
 def _filter_miller10_results(results: List[Dict[str, Any]], min_score: int) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for item in results:
@@ -303,13 +403,24 @@ def _search_with_gpt_search_api(
 ) -> Dict[str, Any]:
     query = _build_web_search_query(snapshot, retrieval, args.gpt_search_query_suffix)
     top_k = max(1, int(args.gpt_search_top_k))
+    infer_locator = bool(getattr(args, "gpt_search_infer_miller_locator", False))
+    infer_rule = (
+        "- If chapter/section is not visible but clinically inferable, you may infer chapter/section only; "
+        "set miller_locator_source='inferred_by_gpt' and miller_locator_confidence<=0.6. Never invent page.\n"
+        if infer_locator
+        else "- Do not infer Miller chapter/section/page. If unknown, leave fields empty and set miller_locator_source='unknown'.\n"
+    )
     user_prompt = (
         "Search online evidence for this anesthesia scenario.\n"
         f"Query: {query}\n\n"
         f"Return top {top_k} results as strict JSON object only:\n"
-        '{"query":"...","results":[{"title":"...","url":"...","snippet":"...","score":0.0}]}\n'
+        '{"query":"...","results":[{"title":"...","url":"...","snippet":"...","score":0.0,'
+        '"miller_chapter":"...","miller_section":"...","miller_page":"...",'
+        '"miller_locator_source":"source_snippet|inferred_by_gpt|unknown","miller_locator_confidence":0.0}]}\n'
         "Rules:\n"
         "- Prioritize Miller's Anesthesia 10th edition evidence.\n"
+        "- If available in the source/snippet, fill miller_chapter, miller_section, and miller_page; set miller_locator_source='source_snippet'.\n"
+        f"{infer_rule}"
         "- Keep snippet concise and clinically relevant.\n"
         "- No markdown fences, no extra text outside JSON.\n"
     )
@@ -333,6 +444,7 @@ def _search_with_gpt_search_api(
             for idx, item in enumerate(items[:top_k], start=1):
                 if not isinstance(item, dict):
                     continue
+                web_meta = _infer_miller_web_metadata(item, rank=idx, allow_gpt_inferred=infer_locator)
                 results.append(
                     {
                         "rank": idx,
@@ -340,6 +452,12 @@ def _search_with_gpt_search_api(
                         "url": str(item.get("url") or "").strip(),
                         "snippet": str(item.get("snippet") or "").strip(),
                         "score": float(item.get("score") or 0.0),
+                        "miller_chapter": web_meta["miller_chapter"],
+                        "miller_section": web_meta["miller_section"],
+                        "miller_page": web_meta["miller_page"],
+                        "miller_locator_source": web_meta["miller_locator_source"],
+                        "miller_locator_confidence": web_meta["miller_locator_confidence"],
+                        "miller_display_locator": web_meta["miller_display_locator"],
                         "provider": "gpt_search_api",
                     }
                 )
@@ -386,9 +504,13 @@ def _format_web_context_block(web_search: Optional[Dict[str, Any]]) -> str:
         title = str(item.get("title") or "").strip()
         url = str(item.get("url") or "").strip()
         snippet = str(item.get("snippet") or "").strip()
+        locator = str(item.get("miller_display_locator") or "").strip()
+        locator_source = str(item.get("miller_locator_source") or "").strip()
+        locator_confidence = item.get("miller_locator_confidence")
+        locator_note = f" source={locator_source} confidence={locator_confidence}" if locator_source else ""
         if len(snippet) > 480:
             snippet = snippet[:477] + "..."
-        lines.append(f"[Web#{rank}] {title} | {url}")
+        lines.append(f"[Web#{rank}] {locator}{locator_note} {title} | {url}".strip())
         lines.append(snippet)
     return "\n".join(lines)
 
@@ -665,12 +787,12 @@ def _build_structured_json_prompt(
                 if not isinstance(item, dict):
                     continue
                 rank = item.get("rank", "?")
-                chapter = str(item.get("chapter") or "").strip() or "未知"
-                paragraph = str(item.get("paragraph") or item.get("chunk_id") or "未知").strip()
+                chapter = str(item.get("chapter") or item.get("section") or "").strip() or "章节定位不足"
+                page = str(item.get("page") or item.get("page_no") or item.get("page_index") or "?").strip() or "?"
                 text = str(item.get("text") or "").strip()
                 if len(text) > 360:
                     text = text[:357] + "..."
-                retrieval_lines.append(f"[M10#{rank}|章节:{chapter}; 段落:{paragraph}] {text}")
+                retrieval_lines.append(f"[M10#{rank} | 术中相关章节: {chapter} | p.{page}] {text}")
     web_lines: List[str] = []
     if isinstance(web_search, dict):
         ws = web_search.get("results", [])
@@ -680,9 +802,10 @@ def _build_structured_json_prompt(
                     continue
                 title = str(item.get("title") or "").strip()
                 snippet = str(item.get("snippet") or "").strip()
+                locator = str(item.get("miller_display_locator") or "").strip()
                 if len(snippet) > 240:
                     snippet = snippet[:237] + "..."
-                web_lines.append(f"[WEB] {title} | {snippet}")
+                web_lines.append(f"[WEB] {locator} {title} | {snippet}".strip())
 
     retrieval_block = "\n".join(retrieval_lines) if retrieval_lines else "none"
     web_block = "\n".join(web_lines) if web_lines else "none"
@@ -701,7 +824,8 @@ def _build_structured_json_prompt(
         "Rules:\n"
         "- No markdown/code fence/explanations.\n"
         "- Keep Chinese clinical text concise.\n"
-        "- miller_decision must include at least one locator token like [M10#1|章节:...; 段落:...].\n"
+        "- miller_decision must include at least one locator token like [M10#1 | 术中相关章节: ... | p.1493].\n"
+        "- miller_decision must include a verbatim evidence quote as: 原文摘录:\"...\". The quote should come from provided Miller retrieval text, not paraphrase.\n"
         "- If uncertain, still give conservative decision grounded by the first Miller locator.\n"
         "- final_output must be an empty string \"\"; do not add extra keys.\n"
     )
@@ -864,12 +988,13 @@ def _repair_missing_miller_label(
         "Rewrite the text into EXACTLY 4 lines:\n"
         "Q: <一句问题>\n"
         "A: 【临床推理】：<1-3句>\n"
-        "【决策干预（Miller）】：<1-3句，尽量包含证据定位如[M10#1|章节:...; 段落:...]>\n"
+        "【决策干预（Miller）】：<1-3句，必须包含证据定位如[M10#1 | 术中相关章节: ... | p.1493]，并附原文摘录:\"...\">\n"
         "【决策干预（VitalDB）】：<1-2句>\n\n"
         "Rules:\n"
         "- Keep labels exactly as written.\n"
         "- Do not add markdown, bullets, JSON, or extra commentary.\n"
         "- If Miller content exists but label is missing, map it into 【决策干预（Miller）】 line.\n"
+        "- Miller line must contain a verbatim evidence quote: 原文摘录:\"...\".\n"
         "- If uncertain, write a conservative Miller suggestion; do not omit the Miller line.\n\n"
         f"Source:\n{raw_text}"
     )
@@ -1234,6 +1359,11 @@ def main() -> None:
     )
     parser.add_argument("--force-gpt-search-miller10", action="store_true")
     parser.add_argument("--gpt-search-miller10-min-score", type=int, default=2)
+    parser.add_argument(
+        "--gpt-search-infer-miller-locator",
+        action="store_true",
+        help="Allow GPT search to infer Miller chapter/section when source snippets do not expose them; inferred locators are marked non-authoritative.",
+    )
     args = parser.parse_args()
 
     records = _load_records(args.input)
