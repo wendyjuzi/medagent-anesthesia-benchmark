@@ -52,24 +52,23 @@ MEDICATION_TRACK_CANDIDATES: Dict[str, List[str]] = {
     "PHE_RATE": [
         "Orchestra/PHE_RATE",
     ],
+    "PHE_VOL": ["Orchestra/PHE_VOL", "Orchestra/PHENYLEPHRINE_VOL"],
     "EPI_RATE": [
         "Orchestra/EPI_RATE",
     ],
-    "PPF20_VOL": [
-        "Orchestra/PPF20_VOL",
-    ],
-    "REMI_VOL": [
-        "Orchestra/REMI_VOL",
-    ],
-}
-ADDITIONAL_MEDICATION_TRACK_CANDIDATES: Dict[str, List[str]] = {
+    "EPI_VOL": ["Orchestra/EPI_VOL", "Orchestra/EPINEPHRINE_VOL"],
     "NOR_RATE": ["Orchestra/NOR_RATE"],
+    "NOR_VOL": ["Orchestra/NOR_VOL", "Orchestra/NOREPI_VOL", "Orchestra/NOREPINEPHRINE_VOL"],
     "EPH_VOL": ["Orchestra/EPH_VOL", "Orchestra/EPHE_VOL", "Orchestra/EPHEDRINE_VOL"],
     "EPH_RATE": ["Orchestra/EPH_RATE", "Orchestra/EPHE_RATE", "Orchestra/EPHEDRINE_RATE"],
     "DOPA_RATE": ["Orchestra/DOPA_RATE"],
+    "DOPA_VOL": ["Orchestra/DOPA_VOL", "Orchestra/DOPAMINE_VOL"],
     "ESMO_RATE": ["Orchestra/ESMO_RATE"],
+    "ESMO_VOL": ["Orchestra/ESMO_VOL", "Orchestra/ESMOLOL_VOL"],
     "NICA_RATE": ["Orchestra/NICA_RATE"],
+    "NICA_VOL": ["Orchestra/NICA_VOL", "Orchestra/NICARDIPINE_VOL"],
     "NPS_RATE": ["Orchestra/NPS_RATE"],
+    "NPS_VOL": ["Orchestra/NPS_VOL", "Orchestra/NITROPRUSSIDE_VOL"],
     "NTG_VOL": ["Orchestra/NTG_VOL", "Orchestra/TNG_VOL", "Orchestra/NITRO_VOL"],
     "NTG_RATE": ["Orchestra/NTG_RATE", "Orchestra/TNG_RATE", "Orchestra/NITRO_RATE"],
     "MIL_VOL": ["Orchestra/MIL_VOL", "Orchestra/MILR_VOL", "Orchestra/MILRINONE_VOL"],
@@ -77,6 +76,16 @@ ADDITIONAL_MEDICATION_TRACK_CANDIDATES: Dict[str, List[str]] = {
     "ATRO_VOL": ["Orchestra/ATRO_VOL", "Orchestra/ATROPINE_VOL"],
     "ATRO_RATE": ["Orchestra/ATRO_RATE", "Orchestra/ATROPINE_RATE"],
     "URA_RATE": ["Orchestra/URA_RATE"],
+    "URA_VOL": ["Orchestra/URA_VOL", "Orchestra/URAPIDIL_VOL"],
+    "PPF20_VOL": [
+        "Orchestra/PPF20_VOL",
+    ],
+    "PPF20_RATE": [
+        "Orchestra/PPF20_RATE",
+    ],
+    "REMI_VOL": [
+        "Orchestra/REMI_VOL",
+    ],
     "REMI_RATE": ["Orchestra/REMI_RATE"],
     "RFTN20_VOL": ["Orchestra/RFTN20_VOL"],
     "RFTN50_VOL": ["Orchestra/RFTN50_VOL"],
@@ -93,17 +102,26 @@ ADDITIONAL_MEDICATION_TRACK_CANDIDATES: Dict[str, List[str]] = {
     "ISO_FI_RATE": ["Primus/FIISO", "Primus/FI_ISO", "Solar8000/ISO_FI"],
     "MAC_RATE": ["Primus/MAC", "Solar8000/MAC"],
 }
+# Kept for backward compatibility in older references; all active tracks are now in MEDICATION_TRACK_CANDIDATES.
+ADDITIONAL_MEDICATION_TRACK_CANDIDATES: Dict[str, List[str]] = {}
 
 NON_PROPOFOL_MED_KEYS: List[str] = [
     "NOR_RATE",
+    "NOR_VOL",
     "EPH_VOL",
     "EPH_RATE",
     "PHE_RATE",
+    "PHE_VOL",
     "EPI_RATE",
+    "EPI_VOL",
     "DOPA_RATE",
+    "DOPA_VOL",
     "ESMO_RATE",
+    "ESMO_VOL",
     "NICA_RATE",
+    "NICA_VOL",
     "NPS_RATE",
+    "NPS_VOL",
     "NTG_VOL",
     "NTG_RATE",
     "MIL_VOL",
@@ -111,6 +129,7 @@ NON_PROPOFOL_MED_KEYS: List[str] = [
     "ATRO_VOL",
     "ATRO_RATE",
     "URA_RATE",
+    "URA_VOL",
     "REMI_VOL",
     "REMI_RATE",
     "RFTN20_VOL",
@@ -133,15 +152,20 @@ NON_PROPOFOL_MED_KEYS: List[str] = [
 
 VASOACTIVE_MED_KEYS = {
     "NOR_RATE",
+    "NOR_VOL",
     "EPH_VOL",
     "EPH_RATE",
     "PHE_RATE",
+    "PHE_VOL",
     "EPI_RATE",
+    "EPI_VOL",
     "DOPA_RATE",
+    "DOPA_VOL",
 }
 
 ANESTHETIC_DEPTH_MED_KEYS = {
     "PPF20_VOL",
+    "PPF20_RATE",
     "SEVO_ET_RATE",
     "SEVO_FI_RATE",
     "DES_ET_RATE",
@@ -160,14 +184,21 @@ MILLER_POLICY_THRESHOLDS = {
 
 MED_CLASS_BY_KEY = {
     "PHE_RATE": "vasopressor",
+    "PHE_VOL": "vasopressor",
     "NOR_RATE": "vasopressor",
+    "NOR_VOL": "vasopressor",
     "EPH_VOL": "vasopressor",
     "EPH_RATE": "vasopressor",
     "EPI_RATE": "inopressor",
+    "EPI_VOL": "inopressor",
     "DOPA_RATE": "inopressor",
+    "DOPA_VOL": "inopressor",
     "ESMO_RATE": "anti_sympathetic",
+    "ESMO_VOL": "anti_sympathetic",
     "NICA_RATE": "anti_sympathetic",
+    "NICA_VOL": "anti_sympathetic",
     "NPS_RATE": "anti_sympathetic",
+    "NPS_VOL": "anti_sympathetic",
     "NTG_VOL": "vasodilator",
     "NTG_RATE": "vasodilator",
     "MIL_VOL": "inodilator",
@@ -175,7 +206,9 @@ MED_CLASS_BY_KEY = {
     "ATRO_VOL": "chronotropic",
     "ATRO_RATE": "chronotropic",
     "URA_RATE": "anti_sympathetic",
+    "URA_VOL": "anti_sympathetic",
     "PPF20_VOL": "hypnotic_iv",
+    "PPF20_RATE": "hypnotic_iv",
     "REMI_VOL": "opioid_analgesic",
     "REMI_RATE": "opioid_analgesic",
     "RFTN20_VOL": "opioid_analgesic",
@@ -197,10 +230,23 @@ MED_CLASS_BY_KEY = {
 
 ACTION_DRUG_BY_MED_KEY = {
     "PHE_RATE": "phenylephrine",
+    "PHE_VOL": "phenylephrine",
     "EPH_VOL": "ephedrine",
     "EPH_RATE": "ephedrine",
     "NOR_RATE": "norepinephrine",
+    "NOR_VOL": "norepinephrine",
     "EPI_RATE": "epinephrine",
+    "EPI_VOL": "epinephrine",
+    "DOPA_RATE": "dopamine",
+    "DOPA_VOL": "dopamine",
+    "ESMO_RATE": "esmolol",
+    "ESMO_VOL": "esmolol",
+    "NICA_RATE": "nicardipine",
+    "NICA_VOL": "nicardipine",
+    "NPS_RATE": "nitroprusside",
+    "NPS_VOL": "nitroprusside",
+    "URA_RATE": "urapidil",
+    "URA_VOL": "urapidil",
     "NTG_VOL": "nitroglycerin",
     "NTG_RATE": "nitroglycerin",
     "MIL_VOL": "milrinone",
@@ -208,12 +254,15 @@ ACTION_DRUG_BY_MED_KEY = {
     "ATRO_VOL": "atropine",
     "ATRO_RATE": "atropine",
     "PPF20_VOL": "propofol",
+    "PPF20_RATE": "propofol",
     "REMI_VOL": "remifentanil",
     "REMI_RATE": "remifentanil",
     "RFTN20_VOL": "remifentanil",
     "RFTN50_VOL": "remifentanil",
     "RFTN20_RATE": "remifentanil",
     "RFTN50_RATE": "remifentanil",
+    "ROC_VOL": "rocuronium",
+    "ROC_RATE": "rocuronium",
 }
 
 LLM_MAX_TOKENS_DEFAULT = 2048
@@ -239,6 +288,14 @@ Q_SUBJECTIVE_HINT_PATTERNS: Tuple[str, ...] = (
     r"麻醉过浅",
 )
 
+MISSING_INDICATOR_PATTERNS: Tuple[str, ...] = (
+    r"(?i)(?:MAP|MBP|SBP|DBP|HR|SpO2|SPO2|BIS|ETCO2|EtCO2|SVV|PPV|CVP|CO|CI|SV|SVR|BT|rSO2|RSO2).{0,12}(?:缺失|缺少|暂无|无有效|未提供|不可用|missing|unavailable|not\s+available|no\s+valid)",
+    r"(?i)(?:缺失|缺少|暂无|无有效|未提供|不可用|missing|unavailable|not\s+available|no\s+valid).{0,12}(?:MAP|MBP|SBP|DBP|HR|SpO2|SPO2|BIS|ETCO2|EtCO2|SVV|PPV|CVP|CO|CI|SV|SVR|BT|rSO2|RSO2)",
+)
+
+# Cache available track names per case to avoid repeated metadata calls.
+_CASE_TRACK_NAME_CACHE: Dict[int, Optional[set[str]]] = {}
+
 VITAL_TRACK_CANDIDATES: Dict[str, List[str]] = {
     "HR": [
         "Solar8000/HR",
@@ -254,6 +311,20 @@ VITAL_TRACK_CANDIDATES: Dict[str, List[str]] = {
         "Solar8000/NIBP_MBP",
         "IntelliVue/NIBP_MBP",
     ],
+    "SBP": [
+        "Solar8000/ART_SBP",
+        "IntelliVue/ABP_SBP",
+        "SNUADC/ART_SBP",
+        "Solar8000/NIBP_SBP",
+        "IntelliVue/NIBP_SBP",
+    ],
+    "DBP": [
+        "Solar8000/ART_DBP",
+        "IntelliVue/ABP_DBP",
+        "SNUADC/ART_DBP",
+        "Solar8000/NIBP_DBP",
+        "IntelliVue/NIBP_DBP",
+    ],
     "SPO2": [
         "Solar8000/PLETH_SPO2",
         "Solar8000/SPO2",
@@ -261,38 +332,276 @@ VITAL_TRACK_CANDIDATES: Dict[str, List[str]] = {
         "Primus/SPO2",
     ],
     "BIS": ["BIS/BIS"],
+    "ETCO2": [
+        "Solar8000/ETCO2",
+        "Solar8000/ETCO2_MMHG",
+        "Primus/ETCO2",
+        "Primus/ETCO2_MMHG",
+        "IntelliVue/EtCO2",
+    ],
+    "SVV": [
+        "Vigileo/SVV",
+        "EV1000/SVV",
+        "Solar8000/SVV",
+    ],
+    "CVP": [
+        "Solar8000/CVP",
+        "IntelliVue/CVP",
+        "SNUADC/CVP",
+    ],
+    "CO": [
+        "Vigileo/CO",
+        "EV1000/CO",
+    ],
+    "CI": [
+        "Vigileo/CI",
+        "EV1000/CI",
+    ],
+    "SV": [
+        "Vigileo/SV",
+        "EV1000/SV",
+    ],
+    "PPV": [
+        "Vigileo/PPV",
+        "EV1000/PPV",
+        "Solar8000/PPV",
+        "IntelliVue/PPV",
+    ],
+    "SVR": [
+        "EV1000/SVR",
+        "Vigileo/SVR",
+    ],
+    "BT": [
+        "Solar8000/BT",
+        "IntelliVue/BT",
+        "SNUADC/BT",
+    ],
+    "RSO2_L": [
+        "INVOS/rSO2_L",
+        "INVOS/RSO2_L",
+    ],
+    "RSO2_R": [
+        "INVOS/rSO2_R",
+        "INVOS/RSO2_R",
+    ],
 }
 
 VITAL_DISPLAY = {
     "HR": "Heart Rate (HR)",
     "MBP": "Mean Arterial Pressure (MBP)",
+    "SBP": "Systolic BP (SBP)",
+    "DBP": "Diastolic BP (DBP)",
     "SPO2": "SpO2",
     "BIS": "BIS",
+    "ETCO2": "EtCO2",
+    "SVV": "SVV",
+    "CVP": "CVP",
+    "CO": "Cardiac Output (CO)",
+    "CI": "Cardiac Index (CI)",
+    "SV": "Stroke Volume (SV)",
+    "PPV": "PPV",
+    "SVR": "Systemic Vascular Resistance (SVR)",
+    "BT": "Body Temperature (BT)",
+    "RSO2_L": "rSO2 Left",
+    "RSO2_R": "rSO2 Right",
 }
 
 VITAL_UNIT = {
     "HR": "bpm",
     "MBP": "mmHg",
+    "SBP": "mmHg",
+    "DBP": "mmHg",
     "SPO2": "%",
     "BIS": "",
+    "ETCO2": "mmHg",
+    "SVV": "%",
+    "CVP": "mmHg",
+    "CO": "L/min",
+    "CI": "L/(min·m²)",
+    "SV": "mL",
+    "PPV": "%",
+    "SVR": "dyn·s·cm⁻5",
+    "BT": "℃",
+    "RSO2_L": "%",
+    "RSO2_R": "%",
 }
 
 CANONICAL_UNIT_GUIDE = {
     "MAP": "mmHg",
+    "SBP": "mmHg",
+    "DBP": "mmHg",
     "HR": "bpm",
     "SpO2": "%",
     "BIS": "index",
+    "EtCO2": "mmHg",
+    "CO": "L/min",
+    "CI": "L/(min·m²)",
+    "SV": "mL",
+    "SVV": "%",
+    "PPV": "%",
+    "CVP": "mmHg",
+    "SVR": "dyn·s·cm⁻5",
+    "BT": "℃",
+    "rSO2": "%",
     "infusion_rate": "mL/h",
     "bolus_volume": "mL",
     "volatile_concentration": "vol%",
     "time": "s or min",
 }
 
+VITALDB_INDICATOR_SOURCE_HINTS: Dict[str, Dict[str, Any]] = {
+    "EtCO2": {
+        "source_type": "waveform",
+        "vitaldb_tags": [
+            "Solar8000/ETCO2",
+            "Solar8000/ETCO2_MMHG",
+            "Primus/ETCO2",
+            "Primus/ETCO2_MMHG",
+            "IntelliVue/EtCO2",
+        ],
+    },
+    "SpO2": {
+        "source_type": "waveform",
+        "vitaldb_tags": [
+            "Solar8000/PLETH_SPO2",
+            "Solar8000/SPO2",
+            "IntelliVue/SpO2",
+            "Primus/SPO2",
+        ],
+    },
+    "ECG": {
+        "source_type": "waveform",
+        "vitaldb_tags": [
+            "Solar8000/ECG_II",
+            "Solar8000/ECG_V5",
+            "IntelliVue/ECG_II",
+            "IntelliVue/ECG_V5",
+            "SNUADC/ECG_II",
+            "SNUADC/ECG_V5",
+        ],
+    },
+    "HR": {
+        "source_type": "waveform",
+        "vitaldb_tags": [
+            "Solar8000/HR",
+            "IntelliVue/HR",
+            "SNUADC/HR",
+            "Primus/HR",
+        ],
+    },
+    "SBP": {
+        "source_type": "waveform",
+        "vitaldb_tags": [
+            "Solar8000/ART_SBP",
+            "IntelliVue/ABP_SBP",
+            "SNUADC/ART_SBP",
+            "Solar8000/NIBP_SBP",
+            "IntelliVue/NIBP_SBP",
+        ],
+    },
+    "DBP": {
+        "source_type": "waveform",
+        "vitaldb_tags": [
+            "Solar8000/ART_DBP",
+            "IntelliVue/ABP_DBP",
+            "SNUADC/ART_DBP",
+            "Solar8000/NIBP_DBP",
+            "IntelliVue/NIBP_DBP",
+        ],
+    },
+    "MAP": {
+        "source_type": "waveform",
+        "vitaldb_tags": [
+            "Solar8000/ART_MBP",
+            "IntelliVue/ABP_MBP",
+            "SNUADC/ART_MBP",
+            "Solar8000/NIBP_MBP",
+            "IntelliVue/NIBP_MBP",
+        ],
+    },
+    "BT": {
+        "source_type": "waveform",
+        "vitaldb_tags": [
+            "Solar8000/BT",
+            "IntelliVue/BT",
+            "SNUADC/BT",
+        ],
+    },
+    "BIS": {
+        "source_type": "waveform",
+        "vitaldb_tags": ["BIS/BIS"],
+    },
+    "rSO2_L": {
+        "source_type": "waveform",
+        "vitaldb_tags": ["INVOS/rSO2_L", "INVOS/RSO2_L"],
+    },
+    "rSO2_R": {
+        "source_type": "waveform",
+        "vitaldb_tags": ["INVOS/rSO2_R", "INVOS/RSO2_R"],
+    },
+    "CO": {
+        "source_type": "waveform",
+        "vitaldb_tags": ["Vigileo/CO", "EV1000/CO"],
+    },
+    "CI": {
+        "source_type": "waveform",
+        "vitaldb_tags": ["Vigileo/CI", "EV1000/CI"],
+    },
+    "SV": {
+        "source_type": "waveform",
+        "vitaldb_tags": ["Vigileo/SV", "EV1000/SV"],
+    },
+    "PPV": {
+        "source_type": "waveform",
+        "vitaldb_tags": ["Vigileo/PPV", "EV1000/PPV", "Solar8000/PPV", "IntelliVue/PPV"],
+    },
+    "SVR": {
+        "source_type": "waveform",
+        "vitaldb_tags": ["EV1000/SVR", "Vigileo/SVR"],
+    },
+    "ABG": {
+        "source_type": "lab",
+        "vitaldb_tags": ["Lab_results ABGA"],
+    },
+    "TEG": {
+        "source_type": "no_direct_key",
+        "vitaldb_tags": [],
+        "note": "VitalDB无直接对应Key",
+    },
+    "ACT": {
+        "source_type": "no_direct_key",
+        "vitaldb_tags": [],
+        "note": "VitalDB无直接对应Key",
+    },
+    "Urine Output": {
+        "source_type": "clinical_information",
+        "vitaldb_tags": ["Clinical Information intraop_uo"],
+    },
+    "Blood Loss": {
+        "source_type": "clinical_information",
+        "vitaldb_tags": ["Clinical Information intraop_ebl"],
+    },
+}
+
 MEDICATION_DISPLAY = {
     "PHE_RATE": "去氧肾上腺素泵速",
+    "PHE_VOL": "去氧肾上腺素累计量",
     "EPH_VOL": "麻黄碱累计量",
     "EPH_RATE": "麻黄碱泵速",
     "EPI_RATE": "肾上腺素泵速",
+    "EPI_VOL": "肾上腺素累计量",
+    "NOR_RATE": "去甲肾上腺素泵速",
+    "NOR_VOL": "去甲肾上腺素累计量",
+    "DOPA_RATE": "多巴胺泵速",
+    "DOPA_VOL": "多巴胺累计量",
+    "ESMO_RATE": "艾司洛尔泵速",
+    "ESMO_VOL": "艾司洛尔累计量",
+    "NICA_RATE": "尼卡地平泵速",
+    "NICA_VOL": "尼卡地平累计量",
+    "NPS_RATE": "硝普钠泵速",
+    "NPS_VOL": "硝普钠累计量",
+    "URA_RATE": "乌拉地尔泵速",
+    "URA_VOL": "乌拉地尔累计量",
     "NTG_VOL": "硝酸甘油累计量",
     "NTG_RATE": "硝酸甘油泵速",
     "MIL_VOL": "米力农累计量",
@@ -300,13 +609,8 @@ MEDICATION_DISPLAY = {
     "ATRO_VOL": "阿托品累计量",
     "ATRO_RATE": "阿托品泵速",
     "PPF20_VOL": "丙泊酚累计量",
+    "PPF20_RATE": "丙泊酚速率",
     "REMI_VOL": "瑞芬太尼累计量",
-    "NOR_RATE": "去甲肾上腺素泵速",
-    "DOPA_RATE": "多巴胺泵速",
-    "ESMO_RATE": "艾司洛尔泵速",
-    "NICA_RATE": "尼卡地平泵速",
-    "NPS_RATE": "硝普钠泵速",
-    "URA_RATE": "乌拉地尔泵速",
     "REMI_RATE": "瑞芬太尼泵速",
     "RFTN20_VOL": "瑞芬太尼20浓度累计量",
     "RFTN50_VOL": "瑞芬太尼50浓度累计量",
@@ -327,15 +631,79 @@ ANES_THRESHOLDS = {
     "map_hypotension_mmhg": 65.0,
     "map_severe_hypotension_mmhg": 55.0,
     "map_relative_drop_pct": 20.0,
+    "sbp_low_mmhg": 90.0,
+    "sbp_high_mmhg": 180.0,
+    "sbp_relative_change_pct": 30.0,
+    "dbp_low_mmhg": 60.0,
+    "dbp_high_mmhg": 100.0,
+    "dbp_relative_change_pct": 30.0,
     "hr_tachycardia_bpm": 100.0,
     "hr_bradycardia_bpm": 50.0,
+    "hr_relative_change_pct": 20.0,
     "spo2_low_pct": 94.0,
+    "spo2_attention_pct": 95.0,
+    "spo2_attention_persist_sec": 20.0,
     "spo2_severe_low_pct": 90.0,
+    "spo2_drop_from_baseline_pct": 4.0,
     "bis_light": 60.0,
     "bis_deep": 40.0,
+    "etco2_low_mmhg": 30.0,
+    "etco2_high_mmhg": 50.0,
+    "etco2_severe_low_mmhg": 25.0,
+    "etco2_severe_high_mmhg": 60.0,
+    "etco2_missing_alert_sec": 2.0,
+    "etco2_zeroing_value_mmhg": 2.0,
+    "etco2_zeroing_hint_sec": 6.0,
+    "co_low_l_min": 4.0,
+    "co_high_l_min": 8.0,
+    "ci_low_l_min_m2": 2.5,
+    "ci_high_l_min_m2": 4.0,
+    "sv_low_ml": 60.0,
+    "sv_high_ml": 100.0,
+    "svv_high_pct": 13.0,
+    "svv_severe_high_pct": 18.0,
+    "ppv_high_pct": 13.0,
+    "ppv_severe_high_pct": 18.0,
+    "cvp_low_mmhg": 2.0,
+    "cvp_high_mmhg": 15.0,
+    "svr_low_dyns_cm5": 800.0,
+    "svr_high_dyns_cm5": 1600.0,
+    "bt_low_c": 36.0,
+    "bt_fever_c": 37.5,
+    "bt_high_fever_c": 38.0,
+    "rso2_low_abs_pct": 55.0,
+    "rso2_warn_abs_pct": 60.0,
+    "rso2_drop_from_baseline_pct": 20.0,
     "critical_window_sec": 30.0,
     "hemodynamic_window_sec": 60.0,
     "slow_trend_window_sec": 120.0,
+}
+
+ADVERSE_EVENT_CRITICAL_TYPES = {
+    "major_bleeding",
+    "anuria_critical",
+    "hyperkalemia_critical",
+    "hypokalemia_critical",
+    "malignant_arrhythmia",
+    "shock_pattern",
+    "suspected_anaphylaxis_pattern",
+    "abg_hypoxemia",
+    "abg_hypercapnia",
+    "abg_metabolic_acidosis_hyperlactatemia",
+}
+
+ADVERSE_EVENT_WARNING_TYPES = {
+    "bleeding_warning",
+    "oliguria_warning",
+    "arrhythmia_event",
+    "hyperglycemia_warning",
+    "hyperglycemia_severe",
+    "allergy_history",
+    "abg_metabolic_acidosis_warning",
+    "abg_be_negative_large",
+    "coagulation_low",
+    "coagulation_high",
+    "act_abnormal",
 }
 
 RULES_DIR = Path(__file__).resolve().parent / "rules"
@@ -670,16 +1038,30 @@ A: 【临床推理】：...
 【决策干预（Miller）】：...
 【决策干预（VitalDB）】：...
 Q must be objective only (background + recent physiologic values/trends + intervention question), with no subjective clinical interpretation hints.
-In 【决策干预（Miller）】, use three-part structure: 诊断依据：...; 具体干预：...; 原文摘录："...[M10 | ...]".
-In 【决策干预（VitalDB）】, generate one concise action aligned to logged_action (drug + direction + core numeric value + unit); if logged_action has no reassessment, do not add reassessment or escalation text.
+In 【决策干预（Miller）】, use three-part structure: 诊断依据：...; 具体干预：...; 原文摘录："...[M10#...]".
+In 【决策干预（VitalDB）】, output an executable action order (drug + direction + magnitude/target + reassessment time + escalation/stop condition) with normalized units.
 Do not output any bullets, headings, checklists, drafting notes, or instruction echoes.
 """.strip()
 
 GOLDEN_ACTION_KEYWORDS: Dict[str, List[str]] = {
     "PHE_RATE": ["去氧肾上腺素", "苯肾上腺素", "phenylephrine"],
+    "PHE_VOL": ["去氧肾上腺素", "苯肾上腺素", "phenylephrine"],
     "EPH_VOL": ["麻黄碱", "ephedrine"],
     "EPH_RATE": ["麻黄碱", "ephedrine"],
     "EPI_RATE": ["肾上腺素", "epinephrine"],
+    "EPI_VOL": ["肾上腺素", "epinephrine"],
+    "NOR_RATE": ["去甲肾上腺素", "norepinephrine"],
+    "NOR_VOL": ["去甲肾上腺素", "norepinephrine"],
+    "DOPA_RATE": ["多巴胺", "dopamine"],
+    "DOPA_VOL": ["多巴胺", "dopamine"],
+    "ESMO_RATE": ["艾司洛尔", "esmolol"],
+    "ESMO_VOL": ["艾司洛尔", "esmolol"],
+    "NICA_RATE": ["尼卡地平", "nicardipine"],
+    "NICA_VOL": ["尼卡地平", "nicardipine"],
+    "NPS_RATE": ["硝普钠", "nitroprusside"],
+    "NPS_VOL": ["硝普钠", "nitroprusside"],
+    "URA_RATE": ["乌拉地尔", "urapidil"],
+    "URA_VOL": ["乌拉地尔", "urapidil"],
     "NTG_VOL": ["硝酸甘油", "nitroglycerin", "glyceryl trinitrate"],
     "NTG_RATE": ["硝酸甘油", "nitroglycerin", "glyceryl trinitrate"],
     "MIL_VOL": ["米力农", "milrinone"],
@@ -687,18 +1069,13 @@ GOLDEN_ACTION_KEYWORDS: Dict[str, List[str]] = {
     "ATRO_VOL": ["阿托品", "atropine"],
     "ATRO_RATE": ["阿托品", "atropine"],
     "PPF20_VOL": ["丙泊酚", "propofol"],
+    "PPF20_RATE": ["丙泊酚", "propofol"],
     "REMI_VOL": ["瑞芬太尼", "remifentanil"],
     "REMI_RATE": ["瑞芬太尼", "remifentanil"],
     "RFTN20_VOL": ["瑞芬太尼", "remifentanil"],
     "RFTN50_VOL": ["瑞芬太尼", "remifentanil"],
     "RFTN20_RATE": ["瑞芬太尼", "remifentanil"],
     "RFTN50_RATE": ["瑞芬太尼", "remifentanil"],
-    "NOR_RATE": ["去甲肾上腺素", "norepinephrine"],
-    "DOPA_RATE": ["多巴胺", "dopamine"],
-    "ESMO_RATE": ["艾司洛尔", "esmolol"],
-    "NICA_RATE": ["尼卡地平", "nicardipine"],
-    "NPS_RATE": ["硝普钠", "nitroprusside"],
-    "URA_RATE": ["乌拉地尔", "urapidil"],
     "ROC_VOL": ["罗库溴铵", "rocuronium"],
     "ROC_RATE": ["罗库溴铵", "rocuronium"],
     "SEVO_ET_RATE": ["七氟烷", "sevoflurane"],
@@ -719,8 +1096,8 @@ FEWSHOT_BY_TYPE: Dict[str, str] = {
         "先稳灌注，再小步调整镇静药速率。</think>\n"
         "Q: 67岁男性，ASA III，胸外科维持期，近5分钟 MAP 72→58 mmHg、HR 86→102 bpm、SpO2 98→97%、BIS 52→66，结合手术背景，此时最合理的干预措施是什么？\n"
         "A: 【临床推理】：当前关键矛盾是循环稳定性与麻醉深度的平衡。若在低灌注状态下盲目加深镇静，可能进一步加重低血压并影响器官灌注。\n"
-        "【决策干预（Miller）】：诊断依据：MAP持续低于65 mmHg且BIS上行; 具体干预：先滴定升压药0.1-0.3 mL/h并2 min复评，MAP≥65 mmHg后再小步调整镇静; 原文摘录:\"treat hypotension before deepening anesthesia\" [M10 | 术中相关章节: Hemodynamic management | p.1493]。\n"
-        "【决策干预（VitalDB）】：将去氧肾上腺素泵速上调至0.1-0.3 mL/h。\n"
+        "【决策干预（Miller）】：诊断依据：MAP持续低于65 mmHg且BIS上行; 具体干预：先滴定升压药0.1-0.3 mL/h并2 min复评，MAP≥65 mmHg后再小步调整镇静; 原文摘录:\"treat hypotension before deepening anesthesia\" [M10#1 | 术中相关章节: Hemodynamic management | p.1493]。\n"
+        "【决策干预（VitalDB）】：立即按logged_action同类升压药将泵速上调0.1-0.3 mL/h，目标MAP≥65 mmHg；2 min复评MAP/HR，若MAP仍<65 mmHg再上调同幅度，若HR>110 bpm或MAP>85 mmHg则回调0.1 mL/h。\n"
         "### End Example\n"
     ),
     "bolus_like_event": (
@@ -728,8 +1105,8 @@ FEWSHOT_BY_TYPE: Dict[str, str] = {
         "<think>患者短时刺激期体征上冲，单次追加药物应以短效、可回退为原则。需避免过度镇静后低血压。</think>\n"
         "Q: 54岁女性，腹部手术刺激期，近3分钟 MAP 78→84 mmHg、HR 78→108 bpm、SpO2 99→99%、BIS 47→64，结合手术背景，此时最合理的干预措施是什么？\n"
         "A: 【临床推理】：短时、可逆的生理波动更适合短效追加干预；持续上调可能带来过量风险。需要结合血压、心率与麻醉深度的同步变化判断。\n"
-        "【决策干预（Miller）】：诊断依据：BIS和HR同步上冲且MAP未低于65 mmHg; 具体干预：同类短效药单次追加0.5-1.0 mL，1-2 min复评后决定是否再追加0.5 mL; 原文摘录:\"short-acting incremental dosing with rapid reassessment\" [M10 | 术中相关章节: Analgesic titration | p.1521]。\n"
-        "【决策干预（VitalDB）】：单次追加同类短效药0.5-1.0 mL。\n"
+        "【决策干预（Miller）】：诊断依据：BIS和HR同步上冲且MAP未低于65 mmHg; 具体干预：同类短效药单次追加0.5-1.0 mL，1-2 min复评后决定是否再追加0.5 mL; 原文摘录:\"short-acting incremental dosing with rapid reassessment\" [M10#2 | 术中相关章节: Analgesic titration | p.1521]。\n"
+        "【决策干预（VitalDB）】：先按logged_action同类药物单次追加0.5-1.0 mL，再观察1-2 min；若BIS仍>60或HR>100 bpm则再追加0.5 mL，若MAP降至<65 mmHg则停止追加并改为维持泵速。\n"
         "### End Example\n"
     ),
     "arrhythmia_event": (
@@ -737,8 +1114,8 @@ FEWSHOT_BY_TYPE: Dict[str, str] = {
         "<think>出现心律事件时，先判断血流动力学稳定性，再决定是否立即药理/电复律路径。麻醉深度与氧合通气也需并行评估。</think>\n"
         "Q: 69岁男性，泌尿外科术中突发心律失常标注，当前 MAP 62 mmHg、HR 42 bpm、SpO2 95%、BIS 45，且近2分钟MAP与HR均下降，结合手术背景，此时最合理的干预措施是什么？\n"
         "A: 【临床推理】：处理顺序应先看灌注与血压稳定性，再区分可观察与需立即干预的节律。同时排查缺氧、二氧化碳潴留、电解质异常及麻醉深度不匹配。\n"
-        "【决策干预（Miller）】：诊断依据：心律事件伴MAP<65 mmHg和HR<50 bpm; 具体干预：先执行不稳定节律路径并给予同类急救药物追加0.5 mL，30-60 s复评后再决定升级; 原文摘录:\"hemodynamic instability determines urgency of treatment\" [M10 | 术中相关章节: Perioperative arrhythmia | p.1608]。\n"
-        "【决策干预（VitalDB）】：立即追加同类急救药物0.5 mL。\n"
+        "【决策干预（Miller）】：诊断依据：心律事件伴MAP<65 mmHg和HR<50 bpm; 具体干预：先执行不稳定节律路径并给予同类急救药物追加0.5 mL，30-60 s复评后再决定升级; 原文摘录:\"hemodynamic instability determines urgency of treatment\" [M10#1 | 术中相关章节: Perioperative arrhythmia | p.1608]。\n"
+        "【决策干预（VitalDB）】：若持续MAP<65 mmHg且HR<50 bpm，先给予同类急救药物追加0.5 mL并准备升级流程，30-60 s复评；若MAP回升≥65 mmHg则转入保守滴定并每2 min复评。\n"
         "### End Example\n"
     ),
     "unlabeled_context_snapshot": (
@@ -746,8 +1123,8 @@ FEWSHOT_BY_TYPE: Dict[str, str] = {
         "<think>无明确事件标签时，依据趋势而非单点，优先识别威胁灌注与氧合的指标。在信息不全时给出保守且可复评的决策。</think>\n"
         "Q: 61岁女性，骨科维持期无明确事件标签，近5分钟 MAP 70→63 mmHg、HR 76→82 bpm、SpO2 98→96%、BIS 43→41，结合手术背景，此时最合理的干预措施是什么？\n"
         "A: 【临床推理】：应以 MAP/SpO2/HR 的连续趋势为主线，避免仅凭单一瞬时异常下结论。信息缺失时优先采取可逆、可滴定的策略。\n"
-        "【决策干预（Miller）】：诊断依据：MAP持续下降并接近65 mmHg阈值; 具体干预：先小步调整同类循环支持0.1-0.2 mL/h并2 min复评，必要时再加0.1 mL/h; 原文摘录:\"use small titratable steps with frequent reassessment\" [M10 | 术中相关章节: Intraoperative hypotension | p.1498]。\n"
-        "【决策干预（VitalDB）】：将同类循环支持药物小步调整至0.1-0.2 mL/h。\n"
+        "【决策干预（Miller）】：诊断依据：MAP持续下降并接近65 mmHg阈值; 具体干预：先小步调整同类循环支持0.1-0.2 mL/h并2 min复评，必要时再加0.1 mL/h; 原文摘录:\"use small titratable steps with frequent reassessment\" [M10#3 | 术中相关章节: Intraoperative hypotension | p.1498]。\n"
+        "【决策干预（VitalDB）】：先按logged_action同类药物小步调整0.1-0.2 mL/h，目标MAP维持65-80 mmHg；2 min复评MAP/HR/SpO2，若MAP继续下降再加0.1 mL/h，若MAP>85 mmHg则回退至前一档。\n"
         "### End Example\n"
     ),
 }
@@ -782,6 +1159,11 @@ class PipelineConfig:
     min_window_points: int
     anes_dur_min: float
     rate_delta_threshold: float
+    rate_sustained_pre_window_sec: float
+    rate_sustained_post_window_sec: float
+    rate_sustained_min_abs_delta: float
+    rate_sustained_min_ratio: float
+    rate_sustained_min_points: int
     vol_delta_threshold: float
     vol_rate_lookback_sec: float
     min_anchor_gap_sec: float
@@ -806,6 +1188,8 @@ class PipelineConfig:
     arrdb_keep_normal: bool
     periodic_anchor_step_sec: float
     periodic_anchor_start_sec: float
+    joint_link_max_gap_sec: float
+    joint_require_med_link: bool
     department_include: str
     llm_max_workers: int
     llm_progress_every: int
@@ -1211,12 +1595,13 @@ def _chapter_from_injected_prefix(text: Any) -> str:
 
 def _format_miller_locator(item: Dict[str, Any], rank: Any = None) -> str:
     parts = _miller_locator_parts(item)
+    rank_text = str(rank if rank is not None else item.get("rank", "?")).strip() or "?"
     chapter_name = _chapter_display_name(parts)
     if chapter_name == "章节定位不足":
         chapter_name = _chapter_from_injected_prefix(item.get("text")) or chapter_name
     chapter_prefix = "术中相关章节" if _is_intraop_related(parts.get("chapter", ""), parts.get("section", ""), item.get("text", "")) else "相关章节"
     page_text = _normalize_page_key(parts.get("page")) or _normalize_page_key(item.get("page")) or "?"
-    return f"[M10 | {chapter_prefix}: {chapter_name} | p.{page_text}]"
+    return f"[M10#{rank_text} | {chapter_prefix}: {chapter_name} | p.{page_text}]"
 
 
 def _tokenize_for_bm25(text: str) -> List[str]:
@@ -1535,6 +1920,22 @@ def _translate_miller_hint(text: str) -> str:
             r"MAP below \1 mmHg but lasting less than \2 s (early warning)",
         ),
         (
+            r"SBP偏低（<\s*([\d.]+) mmHg，持续约([\d.]+)s）",
+            r"low SBP (<\1 mmHg for about \2 s)",
+        ),
+        (
+            r"SBP偏高（>\s*([\d.]+) mmHg，持续约([\d.]+)s）",
+            r"high SBP (>\1 mmHg for about \2 s)",
+        ),
+        (
+            r"DBP偏低（<\s*([\d.]+) mmHg，持续约([\d.]+)s）",
+            r"low DBP (<\1 mmHg for about \2 s)",
+        ),
+        (
+            r"DBP偏高（>\s*([\d.]+) mmHg，持续约([\d.]+)s）",
+            r"high DBP (>\1 mmHg for about \2 s)",
+        ),
+        (
             r"心动过速（HR > ([\d.]+) bpm，持续约([\d.]+)s）",
             r"tachycardia (HR > \1 bpm for about \2 s)",
         ),
@@ -1547,8 +1948,24 @@ def _translate_miller_hint(text: str) -> str:
             r"severe hypoxemia (SpO2 < \1% for about \2 s)",
         ),
         (
+            r"重度低氧血症（SpO2 < ([\d.]+)%，当前约([\d.]+)%）",
+            r"severe hypoxemia (SpO2 < \1%, current about \2%)",
+        ),
+        (
             r"血氧下降（SpO2 < ([\d.]+)%，持续约([\d.]+)s）",
             r"oxygen desaturation (SpO2 < \1% for about \2 s)",
+        ),
+        (
+            r"SpO2高敏感持续预警（[≤<]=?([\d.]+)%，持续约([\d.]+)s）",
+            r"SpO2 high-sensitivity persistent warning (<=\1% for about \2 s)",
+        ),
+        (
+            r"SpO2处于高敏感预警区（[≤<]=?([\d.]+)%），需严密观察呼吸道与通气状态",
+            r"SpO2 in high-sensitivity warning zone (<=\1%); closely assess airway and ventilation",
+        ),
+        (
+            r"SpO2较基线下降明显（([\d.]+)%）",
+            r"SpO2 dropped from baseline (\1%)",
         ),
         (
             r"BIS持续偏高（>([\d.]+)，持续约([\d.]+)s，需结合刺激与EMG）",
@@ -1573,6 +1990,70 @@ def _translate_miller_hint(text: str) -> str:
         (
             r"MAP相对下降触发：用于个体化风险分层",
             r"relative MAP drop triggered; use for individualized risk stratification",
+        ),
+        (
+            r"HR较基线(升高|下降)明显（([\d.]+)%）",
+            r"marked HR \1 from baseline (\2%)",
+        ),
+        (
+            r"HR相对变化触发：变化幅度达到(临床|个体化)关注阈值（>=?([\d.]+)%）",
+            r"relative HR change trigger reached threshold (>=\2%)",
+        ),
+        (
+            r"EtCO2信号持续缺失（约([\d.]+)s，除校零外需立即排查气道/回路）",
+            r"EtCO2 signal missing for about \1 s; urgent airway/circuit check required unless zeroing",
+        ),
+        (
+            r"EtCO2信号缺失（约([\d.]+)s），前序出现近零值，疑似监测校零/复位",
+            r"EtCO2 signal missing for about \1 s with preceding near-zero values, possible monitor zeroing/reset",
+        ),
+        (
+            r"EtCO2重度异常偏低（<([\d.]+) mmHg，持续约([\d.]+)s）",
+            r"severe low EtCO2 (<\1 mmHg for about \2 s)",
+        ),
+        (
+            r"EtCO2重度异常偏高（>([\d.]+) mmHg，持续约([\d.]+)s）",
+            r"severe high EtCO2 (>\1 mmHg for about \2 s)",
+        ),
+        (
+            r"EtCO2偏低（<([\d.]+) mmHg，持续约([\d.]+)s）",
+            r"low EtCO2 (<\1 mmHg for about \2 s)",
+        ),
+        (
+            r"EtCO2偏高（>([\d.]+) mmHg，持续约([\d.]+)s）",
+            r"high EtCO2 (>\1 mmHg for about \2 s)",
+        ),
+        (
+            r"低体温（BT < ([\d.]+)℃，持续约([\d.]+)s）",
+            r"hypothermia (BT < \1°C for about \2 s)",
+        ),
+        (
+            r"发热（BT > ([\d.]+)℃，持续约([\d.]+)s）",
+            r"fever (BT > \1°C for about \2 s)",
+        ),
+        (
+            r"高热（BT ≥ ([\d.]+)℃，持续约([\d.]+)s）",
+            r"high fever (BT >= \1°C for about \2 s)",
+        ),
+        (
+            r"脑氧饱和度异常（rSO2最小约([\d.]+)% < ([\d.]+)%）",
+            r"cerebral desaturation (rSO2 min about \1% < \2%)",
+        ),
+        (
+            r"rSO2持续低值（L约([\d.]+)s, R约([\d.]+)s）",
+            r"persistent low rSO2 (left about \1 s, right about \2 s)",
+        ),
+        (
+            r"ABG低氧血症风险（PaO2≈([\d.]+) mmHg）",
+            r"ABG hypoxemia risk (PaO2 about \1 mmHg)",
+        ),
+        (
+            r"ABG二氧化碳潴留风险（PaCO2≈([\d.]+) mmHg）",
+            r"ABG hypercapnia risk (PaCO2 about \1 mmHg)",
+        ),
+        (
+            r"ABG酸中毒\+高乳酸风险（pH≈([\d.]+), Lactate≈([\d.]+)）",
+            r"ABG acidosis with hyperlactatemia (pH about \1, lactate about \2)",
         ),
         (
             r"BIS 数据缺失（优先依据MAP/HR/SpO2趋势和手术刺激评估）",
@@ -1641,23 +2122,50 @@ def build_miller_intent_tags(snapshot: Dict[str, Any], cfg: Optional[Any] = None
     baseline = assess.get("baseline_comparison", {}) if isinstance(assess, dict) else {}
     flags = assess.get("risk_flags", []) if isinstance(assess, dict) else []
     contextual = assess.get("contextual_interpretation", []) if isinstance(assess, dict) else []
+    persistence = assess.get("persistence_seconds", {}) if isinstance(assess, dict) else {}
+    sensitivity_policy = assess.get("sensitivity_policy", {}) if isinstance(assess, dict) else {}
+    personalized = sensitivity_policy.get("personalized_thresholds", {}) if isinstance(sensitivity_policy, dict) else {}
     context = snapshot.get("preop_context", [])
     anchor = snapshot.get("anchor_detail", {}) if isinstance(snapshot.get("anchor_detail"), dict) else {}
 
     map_now = _safe_float(recent.get("MAP_mmhg"))
+    sbp_now = _safe_float(recent.get("SBP_mmhg"))
+    dbp_now = _safe_float(recent.get("DBP_mmhg"))
     hr_now = _safe_float(recent.get("HR_bpm"))
     spo2_now = _safe_float(recent.get("SpO2_pct"))
     bis_now = _safe_float(recent.get("BIS"))
+    etco2_now = _safe_float(recent.get("EtCO2_mmhg"))
+    co_now = _safe_float(recent.get("CO_L_min"))
+    ci_now = _safe_float(recent.get("CI_L_min_m2"))
+    sv_now = _safe_float(recent.get("SV_ml"))
+    svv_now = _safe_float(recent.get("SVV_pct"))
+    ppv_now = _safe_float(recent.get("PPV_pct"))
+    cvp_now = _safe_float(recent.get("CVP_mmhg"))
+    svr_now = _safe_float(recent.get("SVR_dyns_cm5"))
+    bt_now = _safe_float(recent.get("BT_c"))
+    rso2_l_now = _safe_float(recent.get("rSO2_L_pct"))
+    rso2_r_now = _safe_float(recent.get("rSO2_R_pct"))
     map_drop_pct = _safe_float(baseline.get("MAP_drop_from_baseline_pct"))
+    sbp_change_pct = _safe_float(baseline.get("SBP_change_from_baseline_pct"))
+    dbp_change_pct = _safe_float(baseline.get("DBP_change_from_baseline_pct"))
+    hr_change_pct = _safe_float(baseline.get("HR_change_from_baseline_pct"))
+    spo2_drop_pct = _safe_float(baseline.get("SpO2_drop_from_baseline_pct"))
+    rso2_l_drop_pct = _safe_float(baseline.get("rSO2_L_drop_from_baseline_pct"))
+    rso2_r_drop_pct = _safe_float(baseline.get("rSO2_R_drop_from_baseline_pct"))
+    bis_gt_60_sec = _safe_float(persistence.get("bis_gt_60")) or 0.0
+    bis_lt_40_sec = _safe_float(persistence.get("bis_lt_40")) or 0.0
+    hr_relative_limit = _safe_float(personalized.get("hr_relative_change_pct")) or float(ANES_THRESHOLDS["hr_relative_change_pct"])
+    spo2_attention_limit = _safe_float(personalized.get("spo2_attention_pct")) or float(ANES_THRESHOLDS["spo2_attention_pct"])
+    spo2_drop_limit = _safe_float(personalized.get("spo2_drop_from_baseline_pct")) or float(ANES_THRESHOLDS["spo2_drop_from_baseline_pct"])
     surgery_group = _coerce_text(patient.get("surgery_group"))
     surgery = _coerce_text(snapshot.get("surgery_type"))
     med_key = _coerce_text(anchor.get("medication_key"))
 
-    bis_mode = str(getattr(cfg, "miller_bis_intent_mode", "paired_only") or "paired_only").strip().lower()
-    if bis_mode not in {"full", "paired_only", "off"}:
-        bis_mode = "paired_only"
-    allow_isolated_bis = bis_mode == "full"
-    allow_paired_bis = bis_mode in {"full", "paired_only"}
+    bis_mode = str(getattr(cfg, "miller_bis_intent_mode", "dynamic") or "dynamic").strip().lower()
+    if bis_mode not in {"full", "paired_only", "dynamic", "off"}:
+        bis_mode = "dynamic"
+    allow_isolated_bis = bis_mode in {"full", "dynamic"}
+    allow_paired_bis = bis_mode in {"full", "paired_only", "dynamic"}
 
     intents: List[str] = []
     if surgery_group:
@@ -1678,29 +2186,90 @@ def build_miller_intent_tags(snapshot: Dict[str, Any], cfg: Optional[Any] = None
         _append_intent(intents, "perfusion-first management")
     if map_drop_pct is not None and map_drop_pct >= 20.0:
         _append_intent(intents, "relative MAP decrease from baseline")
+    if sbp_now is not None and (sbp_now < ANES_THRESHOLDS["sbp_low_mmhg"] or sbp_now > ANES_THRESHOLDS["sbp_high_mmhg"]):
+        _append_intent(intents, "systolic blood pressure out of intraoperative range")
+    if dbp_now is not None and (dbp_now < ANES_THRESHOLDS["dbp_low_mmhg"] or dbp_now > ANES_THRESHOLDS["dbp_high_mmhg"]):
+        _append_intent(intents, "diastolic blood pressure out of intraoperative range")
+    if sbp_change_pct is not None and abs(sbp_change_pct) >= ANES_THRESHOLDS["sbp_relative_change_pct"]:
+        _append_intent(intents, "relative SBP change beyond 30% from baseline")
+    if dbp_change_pct is not None and abs(dbp_change_pct) >= ANES_THRESHOLDS["dbp_relative_change_pct"]:
+        _append_intent(intents, "relative DBP change beyond 30% from baseline")
+    if hr_change_pct is not None and abs(hr_change_pct) >= hr_relative_limit:
+        _append_intent(intents, "relative HR change from baseline")
     if spo2_now is not None and spo2_now < 90.0:
         _append_intent(intents, "intraoperative hypoxemia")
         _append_intent(intents, "oxygenation-first management")
     elif spo2_now is not None and spo2_now < 94.0:
         _append_intent(intents, "oxygen desaturation during anesthesia")
+    elif (
+        spo2_now is not None
+        and spo2_now <= spo2_attention_limit
+        and spo2_drop_pct is not None
+        and spo2_drop_pct >= spo2_drop_limit
+    ):
+        _append_intent(intents, "early oxygenation warning from SpO2 baseline drop")
     if hr_now is not None and hr_now > 100.0:
         _append_intent(intents, "intraoperative tachycardia")
     elif hr_now is not None and hr_now < 50.0:
         _append_intent(intents, "intraoperative bradycardia")
+    if etco2_now is not None and etco2_now < ANES_THRESHOLDS["etco2_low_mmhg"]:
+        _append_intent(intents, "low end-tidal CO2 under anesthesia")
+    elif etco2_now is not None and etco2_now > ANES_THRESHOLDS["etco2_high_mmhg"]:
+        _append_intent(intents, "high end-tidal CO2 under anesthesia")
+    if svv_now is not None and svv_now >= ANES_THRESHOLDS["svv_high_pct"]:
+        _append_intent(intents, "possible hypovolemia suggested by elevated SVV")
+    if ppv_now is not None and ppv_now >= ANES_THRESHOLDS["ppv_high_pct"]:
+        _append_intent(intents, "possible preload responsiveness suggested by elevated PPV")
+    if cvp_now is not None and cvp_now <= ANES_THRESHOLDS["cvp_low_mmhg"]:
+        _append_intent(intents, "low preload signal from CVP")
+    elif cvp_now is not None and cvp_now >= ANES_THRESHOLDS["cvp_high_mmhg"]:
+        _append_intent(intents, "high filling pressure signal from CVP")
+    if co_now is not None and co_now < ANES_THRESHOLDS["co_low_l_min"]:
+        _append_intent(intents, "low cardiac output state")
+    if ci_now is not None and ci_now < ANES_THRESHOLDS["ci_low_l_min_m2"]:
+        _append_intent(intents, "low cardiac index with hypoperfusion risk")
+    if sv_now is not None and sv_now < ANES_THRESHOLDS["sv_low_ml"]:
+        _append_intent(intents, "low stroke volume physiology")
+    if svr_now is not None and svr_now < ANES_THRESHOLDS["svr_low_dyns_cm5"]:
+        _append_intent(intents, "systemic vasodilation pattern")
+    elif svr_now is not None and svr_now > ANES_THRESHOLDS["svr_high_dyns_cm5"]:
+        _append_intent(intents, "increased afterload pattern")
+    if bt_now is not None and bt_now < ANES_THRESHOLDS["bt_low_c"]:
+        _append_intent(intents, "perioperative hypothermia risk")
+    elif bt_now is not None and bt_now >= ANES_THRESHOLDS["bt_high_fever_c"]:
+        _append_intent(intents, "intraoperative high fever risk")
+    rso2_vals = [v for v in [rso2_l_now, rso2_r_now] if v is not None]
+    if rso2_vals and min(rso2_vals) < ANES_THRESHOLDS["rso2_low_abs_pct"]:
+        _append_intent(intents, "cerebral desaturation under anesthesia")
+    rso2_drop_vals = [v for v in [rso2_l_drop_pct, rso2_r_drop_pct] if v is not None]
+    if rso2_drop_vals and max(rso2_drop_vals) >= ANES_THRESHOLDS["rso2_drop_from_baseline_pct"]:
+        _append_intent(intents, "relative cerebral oxygenation drop from baseline")
 
     map_abn = map_now is not None and map_now < ANES_THRESHOLDS["map_hypotension_mmhg"]
+    sbp_abn = sbp_now is not None and (sbp_now < ANES_THRESHOLDS["sbp_low_mmhg"] or sbp_now > ANES_THRESHOLDS["sbp_high_mmhg"])
+    dbp_abn = dbp_now is not None and (dbp_now < ANES_THRESHOLDS["dbp_low_mmhg"] or dbp_now > ANES_THRESHOLDS["dbp_high_mmhg"])
     hr_abn = hr_now is not None and (hr_now > ANES_THRESHOLDS["hr_tachycardia_bpm"] or hr_now < ANES_THRESHOLDS["hr_bradycardia_bpm"])
     spo2_abn = spo2_now is not None and spo2_now < ANES_THRESHOLDS["spo2_low_pct"]
-    hemo_or_oxy_abn = map_abn or hr_abn or spo2_abn
+    etco2_abn = etco2_now is not None and (
+        etco2_now < ANES_THRESHOLDS["etco2_low_mmhg"] or etco2_now > ANES_THRESHOLDS["etco2_high_mmhg"]
+    )
+    rso2_abn = bool(rso2_vals) and min(rso2_vals) < ANES_THRESHOLDS["rso2_low_abs_pct"]
+    hemo_or_oxy_abn = map_abn or sbp_abn or dbp_abn or hr_abn or spo2_abn or etco2_abn or rso2_abn
 
     if allow_isolated_bis:
-        if bis_now is not None and bis_now > 60.0:
+        isolated_bis_gate = True
+        if bis_mode == "dynamic":
+            if bis_now is not None and bis_now > 60.0:
+                isolated_bis_gate = bool(bis_gt_60_sec >= 90.0 or bis_now >= 70.0)
+            elif bis_now is not None and bis_now < 40.0:
+                isolated_bis_gate = bool(bis_lt_40_sec >= 90.0 or bis_now <= 35.0)
+        if bis_now is not None and bis_now > 60.0 and isolated_bis_gate:
             _append_intent(intents, "high BIS during general anesthesia")
             if not hemo_or_oxy_abn:
                 _append_intent(intents, "isolated high BIS with stable hemodynamics")
                 _append_intent(intents, "prevention of intraoperative awareness")
                 _append_intent(intents, "hypnotic titration while preserving perfusion")
-        elif bis_now is not None and bis_now < 40.0:
+        elif bis_now is not None and bis_now < 40.0 and isolated_bis_gate:
             _append_intent(intents, "low BIS during general anesthesia")
             if not hemo_or_oxy_abn:
                 _append_intent(intents, "isolated low BIS with stable hemodynamics")
@@ -1716,11 +2285,11 @@ def build_miller_intent_tags(snapshot: Dict[str, Any], cfg: Optional[Any] = None
         _append_intent(intents, "inadequate analgesia versus inadequate anesthetic depth")
     if med_key in {"REMI_VOL", "REMI_RATE", "RFTN20_VOL", "RFTN50_VOL", "RFTN20_RATE", "RFTN50_RATE"}:
         _append_intent(intents, "opioid titration during general anesthesia")
-    if med_key == "PPF20_VOL":
+    if med_key in {"PPF20_VOL", "PPF20_RATE"}:
         _append_intent(intents, "propofol adjustment during general anesthesia")
     if med_key in {"SEVO_ET_RATE", "SEVO_FI_RATE", "DES_ET_RATE", "DES_FI_RATE", "ISO_ET_RATE", "ISO_FI_RATE", "MAC_RATE"}:
         _append_intent(intents, "volatile anesthetic adjustment")
-    if med_key in {"PHE_RATE", "EPH_VOL", "EPH_RATE", "NOR_RATE", "EPI_RATE"}:
+    if med_key in {"PHE_RATE", "PHE_VOL", "EPH_VOL", "EPH_RATE", "NOR_RATE", "NOR_VOL", "EPI_RATE", "EPI_VOL"}:
         _append_intent(intents, "vasopressor choice during intraoperative hypotension")
 
     def _allow_bis_hint(hint: str) -> bool:
@@ -1731,6 +2300,13 @@ def build_miller_intent_tags(snapshot: Dict[str, Any], cfg: Optional[Any] = None
             return False
         if bis_mode == "full":
             return True
+        if bis_mode == "dynamic":
+            if hemo_or_oxy_abn:
+                return True
+            if bis_gt_60_sec >= 90.0 or bis_lt_40_sec >= 90.0:
+                return True
+            awareness_terms = ("awareness", "hypnotic", "anesthetic depth", "stimulation", "emg")
+            return any(term in low for term in awareness_terms)
         paired_terms = ("map", "hypotension", "perfusion", "hr", "tachycardia", "bradycardia", "spo2", "oxygen")
         return any(term in low for term in paired_terms)
 
@@ -1834,6 +2410,11 @@ def build_miller_query(snapshot: Dict[str, Any], cfg: Optional[Any] = None) -> s
         if isinstance(assess, dict)
         else []
     )
+    persistence = (
+        assess.get("persistence_seconds", {})
+        if isinstance(assess, dict)
+        else {}
+    )
     contextual = (
         assess.get("contextual_interpretation", [])
         if isinstance(assess, dict)
@@ -1851,25 +2432,47 @@ def build_miller_query(snapshot: Dict[str, Any], cfg: Optional[Any] = None) -> s
     interp_text = _join_english_hints(contextual, limit=3)
     ctx_text = "; ".join(str(x) for x in context[:3]) if isinstance(context, list) else ""
     map_now = recent.get("MAP_mmhg")
+    sbp_now = recent.get("SBP_mmhg")
+    dbp_now = recent.get("DBP_mmhg")
     hr_now = recent.get("HR_bpm")
     spo2_now = recent.get("SpO2_pct")
     bis_now = recent.get("BIS")
     map_now_f = _safe_float(map_now)
+    sbp_now_f = _safe_float(sbp_now)
+    dbp_now_f = _safe_float(dbp_now)
     hr_now_f = _safe_float(hr_now)
     spo2_now_f = _safe_float(spo2_now)
     bis_now_f = _safe_float(bis_now)
+    bis_gt_60_sec = _safe_float(persistence.get("bis_gt_60")) or 0.0
+    bis_lt_40_sec = _safe_float(persistence.get("bis_lt_40")) or 0.0
+    etco2_now_f = _safe_float(recent.get("EtCO2_mmhg"))
+    co_now_f = _safe_float(recent.get("CO_L_min"))
+    ci_now_f = _safe_float(recent.get("CI_L_min_m2"))
+    sv_now_f = _safe_float(recent.get("SV_ml"))
+    ppv_now_f = _safe_float(recent.get("PPV_pct"))
+    bt_now_f = _safe_float(recent.get("BT_c"))
+    svr_now_f = _safe_float(recent.get("SVR_dyns_cm5"))
+    rso2_l_now_f = _safe_float(recent.get("rSO2_L_pct"))
+    rso2_r_now_f = _safe_float(recent.get("rSO2_R_pct"))
     anchor = snapshot.get("anchor_detail", {}) if isinstance(snapshot.get("anchor_detail"), dict) else {}
     med_key = _coerce_text(anchor.get("medication_key"))
     intervention_type = _coerce_text(snapshot.get("interpreted_intervention_type"))
     intents, rewritten = rewrite_miller_query(snapshot, cfg=cfg)
-    bis_mode = str(getattr(cfg, "miller_bis_intent_mode", "paired_only") or "paired_only").strip().lower()
-    if bis_mode not in {"full", "paired_only", "off"}:
-        bis_mode = "paired_only"
+    bis_mode = str(getattr(cfg, "miller_bis_intent_mode", "dynamic") or "dynamic").strip().lower()
+    if bis_mode not in {"full", "paired_only", "dynamic", "off"}:
+        bis_mode = "dynamic"
 
     map_abn = map_now_f is not None and map_now_f < ANES_THRESHOLDS["map_hypotension_mmhg"]
+    sbp_abn = sbp_now_f is not None and (sbp_now_f < ANES_THRESHOLDS["sbp_low_mmhg"] or sbp_now_f > ANES_THRESHOLDS["sbp_high_mmhg"])
+    dbp_abn = dbp_now_f is not None and (dbp_now_f < ANES_THRESHOLDS["dbp_low_mmhg"] or dbp_now_f > ANES_THRESHOLDS["dbp_high_mmhg"])
     hr_abn = hr_now_f is not None and (hr_now_f > ANES_THRESHOLDS["hr_tachycardia_bpm"] or hr_now_f < ANES_THRESHOLDS["hr_bradycardia_bpm"])
     spo2_abn = spo2_now_f is not None and spo2_now_f < ANES_THRESHOLDS["spo2_low_pct"]
-    hemo_or_oxy_abn = map_abn or hr_abn or spo2_abn
+    etco2_abn = etco2_now_f is not None and (
+        etco2_now_f < ANES_THRESHOLDS["etco2_low_mmhg"] or etco2_now_f > ANES_THRESHOLDS["etco2_high_mmhg"]
+    )
+    rso2_vals = [v for v in [rso2_l_now_f, rso2_r_now_f] if v is not None]
+    rso2_abn = bool(rso2_vals) and min(rso2_vals) < ANES_THRESHOLDS["rso2_low_abs_pct"]
+    hemo_or_oxy_abn = map_abn or sbp_abn or dbp_abn or hr_abn or spo2_abn or etco2_abn or rso2_abn
     bis_high = bis_now_f is not None and bis_now_f > ANES_THRESHOLDS["bis_light"]
     bis_low = bis_now_f is not None and bis_now_f < ANES_THRESHOLDS["bis_deep"]
     bis_abn = bis_high or bis_low
@@ -1885,19 +2488,43 @@ def build_miller_query(snapshot: Dict[str, Any], cfg: Optional[Any] = None) -> s
                 bis_phrase = "high BIS coupled with physiologic instability; avoid automatic deepening before perfusion/oxygenation is secured, "
             elif bis_low:
                 bis_phrase = "low BIS coupled with physiologic instability; assess excessive depth versus hypoperfusion, "
-        elif bis_isolated and bis_mode == "full":
+        elif bis_isolated and bis_mode in {"full", "dynamic"}:
             if bis_high:
-                bis_phrase = "isolated high BIS with stable hemodynamics; prevention of intraoperative awareness and cautious hypnotic titration, "
+                if bis_mode == "full" or bis_gt_60_sec >= 90.0 or bis_now_f >= 70.0:
+                    bis_phrase = "isolated high BIS with stable hemodynamics; prevention of intraoperative awareness and cautious hypnotic titration, "
             elif bis_low:
-                bis_phrase = "isolated low BIS with stable hemodynamics; avoid excessive anesthetic depth, "
+                if bis_mode == "full" or bis_lt_40_sec >= 90.0 or bis_now_f <= 35.0:
+                    bis_phrase = "isolated low BIS with stable hemodynamics; avoid excessive anesthetic depth, "
 
     recent_parts: List[str] = []
     if map_now_f is not None:
         recent_parts.append(f"MAP {map_now} mmHg")
+    if sbp_now_f is not None:
+        recent_parts.append(f"SBP {sbp_now} mmHg")
+    if dbp_now_f is not None:
+        recent_parts.append(f"DBP {dbp_now} mmHg")
     if hr_now_f is not None:
         recent_parts.append(f"HR {hr_now} bpm")
     if spo2_now_f is not None:
         recent_parts.append(f"SpO2 {spo2_now}%")
+    if etco2_now_f is not None:
+        recent_parts.append(f"EtCO2 {etco2_now_f:.1f} mmHg")
+    if co_now_f is not None:
+        recent_parts.append(f"CO {co_now_f:.1f} L/min")
+    if ci_now_f is not None:
+        recent_parts.append(f"CI {ci_now_f:.1f} L/(min·m²)")
+    if sv_now_f is not None:
+        recent_parts.append(f"SV {sv_now_f:.0f} mL")
+    if ppv_now_f is not None:
+        recent_parts.append(f"PPV {ppv_now_f:.1f}%")
+    if svr_now_f is not None:
+        recent_parts.append(f"SVR {svr_now_f:.0f} dyn·s·cm⁻5")
+    if bt_now_f is not None:
+        recent_parts.append(f"BT {bt_now_f:.1f}℃")
+    if rso2_l_now_f is not None:
+        recent_parts.append(f"rSO2_L {rso2_l_now_f:.1f}%")
+    if rso2_r_now_f is not None:
+        recent_parts.append(f"rSO2_R {rso2_r_now_f:.1f}%")
     if bis_now_f is not None:
         recent_parts.append(f"BIS {bis_now}")
     recent_state_text = ", ".join(recent_parts) if recent_parts else "available physiologic signals not provided"
@@ -2060,6 +2687,54 @@ def resolve_column(df: pd.DataFrame, candidates: Sequence[str]) -> Optional[str]
     return None
 
 
+def _get_case_available_track_names(caseid: int) -> Optional[set[str]]:
+    if int(caseid) in _CASE_TRACK_NAME_CACHE:
+        return _CASE_TRACK_NAME_CACHE[int(caseid)]
+    names: Optional[set[str]] = None
+    try:
+        if hasattr(vitaldb, "api") and hasattr(vitaldb.api, "get_track_names"):
+            fn = vitaldb.api.get_track_names
+            raw = None
+            # Support both signatures observed in wrappers.
+            try:
+                raw = fn([int(caseid)])
+            except Exception:
+                raw = fn(int(caseid))
+            if isinstance(raw, dict):
+                # e.g., {caseid: [tracks]}
+                vals = raw.get(int(caseid)) or raw.get(str(caseid))
+                if isinstance(vals, list):
+                    names = {str(x) for x in vals if str(x).strip()}
+            elif isinstance(raw, list):
+                if raw and isinstance(raw[0], dict):
+                    # e.g., [{"caseid":xx, "tname":"Solar8000/HR"}, ...]
+                    out = set()
+                    for item in raw:
+                        if not isinstance(item, dict):
+                            continue
+                        tname = item.get("tname") or item.get("track_name") or item.get("name")
+                        c = item.get("caseid")
+                        if tname and (c is None or int(c) == int(caseid)):
+                            out.add(str(tname))
+                    names = out if out else None
+                else:
+                    # e.g., ["Solar8000/HR", ...]
+                    names = {str(x) for x in raw if str(x).strip()}
+    except Exception:
+        names = None
+    _CASE_TRACK_NAME_CACHE[int(caseid)] = names
+    return names
+
+
+def _filter_tracks_for_case(caseid: int, requested_tracks: Sequence[str]) -> List[str]:
+    req = [str(t) for t in requested_tracks if str(t).strip()]
+    available = _get_case_available_track_names(caseid)
+    if not available:
+        return list(dict.fromkeys(req))
+    kept = [t for t in req if t in available]
+    return list(dict.fromkeys(kept)) if kept else list(dict.fromkeys(req))
+
+
 def _sanitize_text_for_json(text: str) -> str:
     # Remove illegal control chars that can break JSONL parsing in some readers.
     return "".join(ch for ch in text if (ch in "\n\r\t" or ord(ch) >= 32))
@@ -2179,13 +2854,67 @@ def _physio_filter_series(series: pd.Series, key: Optional[str]) -> pd.Series:
     s = pd.to_numeric(series, errors="coerce")
     if key == "MBP":
         # MAP physiologic bound in mmHg; also removes negative/zero artifacts.
-        return s.where((s >= 20.0) & (s <= 220.0))
-    if key == "HR":
-        return s.where((s >= 20.0) & (s <= 220.0))
-    if key == "SPO2":
-        return s.where((s >= 50.0) & (s <= 100.0))
-    if key == "BIS":
-        return s.where((s >= 1.0) & (s <= 100.0))
+        s = s.where((s >= 20.0) & (s <= 220.0))
+    elif key == "SBP":
+        s = s.where((s >= 40.0) & (s <= 260.0))
+    elif key == "DBP":
+        s = s.where((s >= 20.0) & (s <= 180.0))
+    elif key == "HR":
+        s = s.where((s >= 20.0) & (s <= 220.0))
+    elif key == "SPO2":
+        s = s.where((s >= 50.0) & (s <= 100.0))
+    elif key == "BIS":
+        s = s.where((s >= 1.0) & (s <= 100.0))
+    elif key == "ETCO2":
+        s = s.where((s >= 0.0) & (s <= 100.0))
+    elif key == "SVV":
+        s = s.where((s >= 0.0) & (s <= 80.0))
+    elif key == "PPV":
+        s = s.where((s >= 0.0) & (s <= 80.0))
+    elif key == "CVP":
+        s = s.where((s >= -5.0) & (s <= 45.0))
+    elif key == "CO":
+        s = s.where((s >= 0.5) & (s <= 20.0))
+    elif key == "CI":
+        s = s.where((s >= 0.5) & (s <= 10.0))
+    elif key == "SV":
+        s = s.where((s >= 10.0) & (s <= 250.0))
+    elif key == "SVR":
+        s = s.where((s >= 100.0) & (s <= 5000.0))
+    elif key == "BT":
+        s = s.where((s >= 30.0) & (s <= 43.0))
+    elif key in {"RSO2_L", "RSO2_R"}:
+        s = s.where((s >= 15.0) & (s <= 100.0))
+
+    # Artifact suppression:
+    # 1) rolling-median baseline to reduce high-frequency spike noise;
+    # 2) remove one-point "impulse" spikes that recover immediately.
+    win = 5
+    med = s.rolling(window=win, center=True, min_periods=3).median()
+    residual = (s - med).abs()
+    mad = residual.rolling(window=win, center=True, min_periods=3).median()
+    scale = mad * 1.4826
+    # Base tolerance prevents over-filtering when MAD is near zero.
+    base_tol_by_key = {
+        "MBP": 20.0,
+        "SBP": 25.0,
+        "DBP": 15.0,
+        "HR": 20.0,
+        "SPO2": 4.0,
+        "BIS": 10.0,
+        "ETCO2": 8.0,
+        "CVP": 8.0,
+    }
+    base_tol = float(base_tol_by_key.get(str(key), 10.0))
+    dyn_th = (6.0 * scale).fillna(0.0)
+    threshold = np.maximum(dyn_th.to_numpy(dtype=float), base_tol)
+
+    prev_v = s.shift(1)
+    next_v = s.shift(-1)
+    has_neighbors = prev_v.notna() & next_v.notna()
+    fast_recovery = (prev_v - next_v).abs() <= (0.5 * threshold)
+    spike_like = has_neighbors & fast_recovery & (residual > threshold)
+    s = s.mask(spike_like)
     return s
 
 
@@ -2227,7 +2956,8 @@ def all_track_candidates() -> List[str]:
 def load_clinical_table(path: str) -> pd.DataFrame:
     if not os.path.exists(path):
         raise FileNotFoundError(f"clinical CSV not found: {path}")
-    df = pd.read_csv(path)
+    # Avoid mixed-type chunk inference warnings on wide multisource CSVs.
+    df = pd.read_csv(path, low_memory=False)
     if "caseid" not in df.columns:
         raise ValueError("clinical CSV must contain column: caseid")
     df = df.copy()
@@ -2242,6 +2972,9 @@ def fetch_medication_frame(caseid: int, interval_sec: float) -> Optional[pd.Data
     for cands in medication_track_candidates().values():
         med_tracks.extend(cands)
     med_tracks = list(dict.fromkeys(med_tracks))
+    med_tracks = _filter_tracks_for_case(caseid, med_tracks)
+    if not med_tracks:
+        return None
     try:
         vf = vitaldb.VitalFile(caseid, track_names=med_tracks)
         med_df = vf.to_pandas(med_tracks, interval_sec)
@@ -2322,7 +3055,7 @@ def stage1_group_and_filter(cfg: PipelineConfig) -> pd.DataFrame:
     else:
         df = df.drop_duplicates(subset=["caseid"], keep="first").reset_index(drop=True)
 
-    if cfg.anchor_mode in ("arrdb", "hybrid", "periodic"):
+    if cfg.anchor_mode in ("arrdb", "hybrid", "periodic", "joint"):
         valid_df = df.copy()
     elif cfg.skip_medication_filter:
         valid_df = df.copy()
@@ -2348,6 +3081,9 @@ def stage1_group_and_filter(cfg: PipelineConfig) -> pd.DataFrame:
 
 def fetch_case_frame(caseid: int, interval_sec: float, cfg: PipelineConfig) -> Optional[pd.DataFrame]:
     tracks = all_track_candidates()
+    tracks = _filter_tracks_for_case(caseid, tracks)
+    if not tracks:
+        return None
     try:
         vf = vitaldb.VitalFile(caseid, track_names=tracks)
         df = vf.to_pandas(tracks, interval_sec)
@@ -2415,6 +3151,100 @@ def _compute_smoothed_rate_for_vol_anchor(
     dv = v_now - v_ref
     rate = (dv / dt) * 3600.0
     return rate, dt, t_ref, t_now, v_ref, v_now
+
+
+def _series_window_median(
+    value_series: pd.Series,
+    time_series: pd.Series,
+    start_sec: float,
+    end_sec: float,
+) -> Tuple[Optional[float], int]:
+    if end_sec <= start_sec:
+        return None, 0
+    sub = pd.DataFrame({"t": time_series, "v": value_series}).dropna()
+    if sub.empty:
+        return None, 0
+    m = sub[(sub["t"] >= float(start_sec)) & (sub["t"] <= float(end_sec))]
+    if m.empty:
+        return None, 0
+    return float(m["v"].median()), int(len(m))
+
+
+def _rate_anchor_is_sustained(
+    value_series: pd.Series,
+    time_series: pd.Series,
+    anchor_idx: int,
+    instant_delta: float,
+    cfg: PipelineConfig,
+) -> Tuple[bool, Optional[float], Optional[float], Optional[float]]:
+    t_now = _safe_float(time_series.iloc[int(anchor_idx)]) if len(time_series) > int(anchor_idx) else None
+    if t_now is None:
+        return False, None, None, None
+
+    pre_med, pre_n = _series_window_median(
+        value_series=value_series,
+        time_series=time_series,
+        start_sec=float(t_now) - float(cfg.rate_sustained_pre_window_sec),
+        end_sec=float(t_now),
+    )
+    post_med, post_n = _series_window_median(
+        value_series=value_series,
+        time_series=time_series,
+        start_sec=float(t_now),
+        end_sec=float(t_now) + float(cfg.rate_sustained_post_window_sec),
+    )
+    min_n = int(cfg.rate_sustained_min_points)
+    if pre_med is None or post_med is None or pre_n < min_n or post_n < min_n:
+        return False, pre_med, post_med, None
+
+    sustained_delta = float(post_med - pre_med)
+    min_delta = max(float(cfg.rate_delta_threshold), float(cfg.rate_sustained_min_abs_delta))
+    if abs(sustained_delta) < min_delta:
+        return False, pre_med, post_med, sustained_delta
+    if sustained_delta * float(instant_delta) <= 0:
+        return False, pre_med, post_med, sustained_delta
+
+    sub = pd.DataFrame({"t": time_series, "v": value_series}).dropna()
+    post = sub[(sub["t"] >= float(t_now)) & (sub["t"] <= float(t_now) + float(cfg.rate_sustained_post_window_sec))]
+    if post.empty:
+        return False, pre_med, post_med, sustained_delta
+
+    # Directional consistency: most post-window values should remain on the new side.
+    if sustained_delta > 0:
+        consistent = float((post["v"] >= pre_med + 0.5 * min_delta).mean())
+    else:
+        consistent = float((post["v"] <= pre_med - 0.5 * min_delta).mean())
+    if consistent < float(cfg.rate_sustained_min_ratio):
+        return False, pre_med, post_med, sustained_delta
+    return True, pre_med, post_med, sustained_delta
+
+
+def _paired_volume_at_anchor(
+    df: pd.DataFrame,
+    med_key: str,
+    time_sec: float,
+    search_half_window_sec: float = 5.0,
+) -> Tuple[Optional[str], Optional[str], Optional[float]]:
+    if not med_key.endswith("_RATE"):
+        return None, None, None
+    vol_key = med_key.replace("_RATE", "_VOL")
+    cands = medication_track_candidates().get(vol_key, [])
+    if not cands:
+        return vol_key, None, None
+    vol_col = resolve_column(df, cands)
+    if vol_col is None or vol_col not in df.columns or "Time" not in df.columns:
+        return vol_key, None, None
+    t = pd.to_numeric(df["Time"], errors="coerce")
+    v = pd.to_numeric(df[vol_col], errors="coerce")
+    sub = pd.DataFrame({"t": t, "v": v}).dropna()
+    if sub.empty:
+        return vol_key, vol_col, None
+    near = sub[(sub["t"] >= float(time_sec) - float(search_half_window_sec)) & (sub["t"] <= float(time_sec) + float(search_half_window_sec))]
+    if near.empty:
+        idx = (sub["t"] - float(time_sec)).abs().idxmin()
+        return vol_key, vol_col, float(sub.loc[idx, "v"])
+    idx = (near["t"] - float(time_sec)).abs().idxmin()
+    return vol_key, vol_col, float(near.loc[idx, "v"])
 
 
 def _resolve_column_case_insensitive(df: pd.DataFrame, candidates: Sequence[str], explicit: str = "") -> Optional[str]:
@@ -2688,6 +3518,12 @@ def find_anchors(df: pd.DataFrame, cfg: PipelineConfig) -> List[Dict[str, Any]]:
             smoothed_ref_volume_ml = None
             smoothed_current_volume_ml = None
             smoothed_delta_volume_ml = None
+            sustained_pre_median = None
+            sustained_post_median = None
+            sustained_delta = None
+            paired_volume_key = None
+            paired_volume_track = None
+            paired_volume_ml = None
             if med_key.endswith("_VOL") and time_series is not None:
                 (
                     smoothed_rate_ml_per_h,
@@ -2707,6 +3543,29 @@ def find_anchors(df: pd.DataFrame, cfg: PipelineConfig) -> List[Dict[str, Any]]:
                     and smoothed_ref_volume_ml is not None
                 ):
                     smoothed_delta_volume_ml = smoothed_current_volume_ml - smoothed_ref_volume_ml
+            elif (
+                med_key.endswith("_RATE")
+                and med_key not in {"SEVO_ET_RATE", "SEVO_FI_RATE", "DES_ET_RATE", "DES_FI_RATE", "ISO_ET_RATE", "ISO_FI_RATE", "MAC_RATE"}
+                and str(col).startswith("Orchestra/")
+                and time_series is not None
+            ):
+                ok, pre_med, post_med, sus_delta = _rate_anchor_is_sustained(
+                    value_series=s,
+                    time_series=time_series,
+                    anchor_idx=int(i),
+                    instant_delta=d,
+                    cfg=cfg,
+                )
+                if not ok:
+                    continue
+                sustained_pre_median = pre_med
+                sustained_post_median = post_med
+                sustained_delta = sus_delta
+                paired_volume_key, paired_volume_track, paired_volume_ml = _paired_volume_at_anchor(
+                    df=df,
+                    med_key=med_key,
+                    time_sec=t,
+                )
 
             # Hard-kill common TCI/init pseudo-anchors, e.g. 0 -> 400 setup jumps.
             if before is not None and abs(before) <= 1e-6 and d >= 100.0:
@@ -2733,6 +3592,12 @@ def find_anchors(df: pd.DataFrame, cfg: PipelineConfig) -> List[Dict[str, Any]]:
                 "smoothed_ref_volume_ml": smoothed_ref_volume_ml,
                 "smoothed_current_volume_ml": smoothed_current_volume_ml,
                 "smoothed_delta_volume_ml": smoothed_delta_volume_ml,
+                "sustained_pre_median": sustained_pre_median,
+                "sustained_post_median": sustained_post_median,
+                "sustained_delta": sustained_delta,
+                "paired_volume_key": paired_volume_key,
+                "paired_volume_track": paired_volume_track,
+                "paired_volume_ml": paired_volume_ml,
                 "anchor_source": "medication",
             }
             if is_probable_setup_rate_anchor(event, cfg):
@@ -2874,11 +3739,109 @@ def _tail_persistence_by_vital(
     return _tail_condition_duration_sec(tvals=tvals, mask_vals=mask_vals)
 
 
+def _tail_missing_duration_by_vital(df_window: pd.DataFrame, vital_key: str) -> float:
+    if "Time" not in df_window.columns:
+        return 0.0
+    col = resolve_vital_column(df_window, vital_key)
+    if col is None:
+        return 0.0
+    t = pd.to_numeric(df_window["Time"], errors="coerce")
+    s = _physio_filter_series(pd.to_numeric(df_window[col], errors="coerce"), key=vital_key)
+    valid_time = t.notna()
+    if not valid_time.any():
+        return 0.0
+    tvals = t[valid_time].to_numpy(dtype=float)
+    missing_mask = s[valid_time].isna().to_numpy(dtype=bool)
+    return _tail_condition_duration_sec(tvals=tvals, mask_vals=missing_mask)
+
+
 def _safe_get_series(df: pd.DataFrame, key: str) -> Optional[pd.Series]:
     col = resolve_vital_column(df, key)
     if col is None:
         return None
     return df[col]
+
+
+def _build_vitaldb_track_map(
+    df_window: pd.DataFrame,
+    row: pd.Series,
+) -> Dict[str, Any]:
+    track_map: Dict[str, Any] = {}
+    key_alias = {
+        "MBP": "MAP",
+        "SPO2": "SpO2",
+        "ETCO2": "EtCO2",
+        "RSO2_L": "rSO2_L",
+        "RSO2_R": "rSO2_R",
+    }
+
+    for vital_key, cands in VITAL_TRACK_CANDIDATES.items():
+        col = resolve_vital_column(df_window, vital_key)
+        public_key = key_alias.get(vital_key, vital_key)
+        item: Dict[str, Any] = {
+            "source_type": "waveform",
+            "candidate_tags": cands,
+            "resolved_track": col if col else "not_available",
+        }
+        if col and col in df_window.columns:
+            valid_n = int(pd.to_numeric(df_window[col], errors="coerce").dropna().shape[0])
+            item["valid_points_in_window"] = valid_n
+        track_map[public_key] = item
+
+    # ECG uses explicit tags and is not part of VITAL_TRACK_CANDIDATES.
+    ecg_candidates = [
+        "Solar8000/ECG_II",
+        "Solar8000/ECG_V5",
+        "IntelliVue/ECG_II",
+        "IntelliVue/ECG_V5",
+        "SNUADC/ECG_II",
+        "SNUADC/ECG_V5",
+    ]
+    ecg_resolved = [c for c in ecg_candidates if c in df_window.columns]
+    track_map["ECG"] = {
+        "source_type": "waveform",
+        "candidate_tags": ecg_candidates,
+        "resolved_track": ecg_resolved if ecg_resolved else "not_available",
+        "valid_points_in_window": int(
+            sum(pd.to_numeric(df_window[c], errors="coerce").dropna().shape[0] for c in ecg_resolved)
+        )
+        if ecg_resolved
+        else 0,
+    }
+
+    track_map["ABG"] = {
+        "source_type": "lab",
+        "candidate_tags": ["Lab_results ABGA"],
+        "resolved_track": "from_clinical_table_fields",
+        "fields": ["abga_pao2", "abga_paco2", "abga_ph", "abga_lactate", "abga_k", "abga_be"],
+    }
+    track_map["TEG"] = {
+        "source_type": "no_direct_key",
+        "candidate_tags": [],
+        "resolved_track": "no_direct_key",
+    }
+    track_map["ACT"] = {
+        "source_type": "no_direct_key",
+        "candidate_tags": [],
+        "resolved_track": "no_direct_key",
+    }
+
+    uo_keys = ["intraop_uo", "uo", "urine_output_ml"]
+    ebl_keys = ["intraop_ebl", "ebl", "blood_loss_ml"]
+    resolved_uo = next((k for k in uo_keys if k in row.index and _safe_float(row.get(k)) is not None), None)
+    resolved_ebl = next((k for k in ebl_keys if k in row.index and _safe_float(row.get(k)) is not None), None)
+    track_map["Urine Output"] = {
+        "source_type": "clinical_information",
+        "candidate_tags": ["Clinical Information intraop_uo"],
+        "resolved_track": resolved_uo if resolved_uo else "not_available",
+    }
+    track_map["Blood Loss"] = {
+        "source_type": "clinical_information",
+        "candidate_tags": ["Clinical Information intraop_ebl"],
+        "resolved_track": resolved_ebl if resolved_ebl else "not_available",
+    }
+
+    return track_map
 
 
 def _median_in_time_window(
@@ -2912,23 +3875,116 @@ def build_baseline_comparison(
     base_start = max(0.0, float(anchor_time_sec) - 1200.0)
 
     mbp_baseline = _median_in_time_window(df_case, "MBP", base_start, base_end)
+    sbp_baseline = _median_in_time_window(df_case, "SBP", base_start, base_end)
+    dbp_baseline = _median_in_time_window(df_case, "DBP", base_start, base_end)
     hr_baseline = _median_in_time_window(df_case, "HR", base_start, base_end)
+    spo2_baseline = _median_in_time_window(df_case, "SPO2", base_start, base_end)
+    etco2_baseline = _median_in_time_window(df_case, "ETCO2", base_start, base_end)
+    co_baseline = _median_in_time_window(df_case, "CO", base_start, base_end)
+    ci_baseline = _median_in_time_window(df_case, "CI", base_start, base_end)
+    sv_baseline = _median_in_time_window(df_case, "SV", base_start, base_end)
+    ppv_baseline = _median_in_time_window(df_case, "PPV", base_start, base_end)
+    svr_baseline = _median_in_time_window(df_case, "SVR", base_start, base_end)
+    bt_baseline = _median_in_time_window(df_case, "BT", base_start, base_end)
+    rso2_l_baseline = _median_in_time_window(df_case, "RSO2_L", base_start, base_end)
+    rso2_r_baseline = _median_in_time_window(df_case, "RSO2_R", base_start, base_end)
 
     mbp_current = None
+    sbp_current = None
+    dbp_current = None
     hr_current = None
+    spo2_current = None
+    etco2_current = None
+    co_current = None
+    ci_current = None
+    sv_current = None
+    ppv_current = None
+    svr_current = None
+    bt_current = None
+    rso2_l_current = None
+    rso2_r_current = None
     mbp_s = _safe_get_series(df_window, "MBP")
+    sbp_s = _safe_get_series(df_window, "SBP")
+    dbp_s = _safe_get_series(df_window, "DBP")
     hr_s = _safe_get_series(df_window, "HR")
+    spo2_s = _safe_get_series(df_window, "SPO2")
+    etco2_s = _safe_get_series(df_window, "ETCO2")
+    co_s = _safe_get_series(df_window, "CO")
+    ci_s = _safe_get_series(df_window, "CI")
+    sv_s = _safe_get_series(df_window, "SV")
+    ppv_s = _safe_get_series(df_window, "PPV")
+    svr_s = _safe_get_series(df_window, "SVR")
+    bt_s = _safe_get_series(df_window, "BT")
+    rso2_l_s = _safe_get_series(df_window, "RSO2_L")
+    rso2_r_s = _safe_get_series(df_window, "RSO2_R")
     if mbp_s is not None:
         mbp_current = _last_window_mean(mbp_s, vital_key="MBP")
+    if sbp_s is not None:
+        sbp_current = _last_window_mean(sbp_s, vital_key="SBP")
+    if dbp_s is not None:
+        dbp_current = _last_window_mean(dbp_s, vital_key="DBP")
     if hr_s is not None:
         hr_current = _last_window_mean(hr_s, vital_key="HR")
+    if spo2_s is not None:
+        spo2_current = _last_window_mean(spo2_s, vital_key="SPO2")
+    if etco2_s is not None:
+        etco2_current = _last_window_mean(etco2_s, vital_key="ETCO2")
+    if co_s is not None:
+        co_current = _last_window_mean(co_s, vital_key="CO")
+    if ci_s is not None:
+        ci_current = _last_window_mean(ci_s, vital_key="CI")
+    if sv_s is not None:
+        sv_current = _last_window_mean(sv_s, vital_key="SV")
+    if ppv_s is not None:
+        ppv_current = _last_window_mean(ppv_s, vital_key="PPV")
+    if svr_s is not None:
+        svr_current = _last_window_mean(svr_s, vital_key="SVR")
+    if bt_s is not None:
+        bt_current = _last_window_mean(bt_s, vital_key="BT")
+    if rso2_l_s is not None:
+        rso2_l_current = _last_window_mean(rso2_l_s, vital_key="RSO2_L")
+    if rso2_r_s is not None:
+        rso2_r_current = _last_window_mean(rso2_r_s, vital_key="RSO2_R")
 
     map_drop_pct = None
+    sbp_change_pct = None
+    dbp_change_pct = None
     hr_change_pct = None
+    spo2_drop_pct = None
+    etco2_change_pct = None
+    co_change_pct = None
+    ci_change_pct = None
+    sv_change_pct = None
+    ppv_change_pct = None
+    svr_change_pct = None
+    rso2_l_drop_pct = None
+    rso2_r_drop_pct = None
     if mbp_baseline is not None and mbp_current is not None and mbp_baseline > 0:
         map_drop_pct = float((mbp_baseline - mbp_current) / mbp_baseline * 100.0)
+    if sbp_baseline is not None and sbp_current is not None and sbp_baseline > 0:
+        sbp_change_pct = float((sbp_current - sbp_baseline) / sbp_baseline * 100.0)
+    if dbp_baseline is not None and dbp_current is not None and dbp_baseline > 0:
+        dbp_change_pct = float((dbp_current - dbp_baseline) / dbp_baseline * 100.0)
     if hr_baseline is not None and hr_current is not None and hr_baseline > 0:
         hr_change_pct = float((hr_current - hr_baseline) / hr_baseline * 100.0)
+    if spo2_baseline is not None and spo2_current is not None and spo2_baseline > 0:
+        spo2_drop_pct = float((spo2_baseline - spo2_current) / spo2_baseline * 100.0)
+    if etco2_baseline is not None and etco2_current is not None and etco2_baseline > 0:
+        etco2_change_pct = float((etco2_current - etco2_baseline) / etco2_baseline * 100.0)
+    if co_baseline is not None and co_current is not None and co_baseline > 0:
+        co_change_pct = float((co_current - co_baseline) / co_baseline * 100.0)
+    if ci_baseline is not None and ci_current is not None and ci_baseline > 0:
+        ci_change_pct = float((ci_current - ci_baseline) / ci_baseline * 100.0)
+    if sv_baseline is not None and sv_current is not None and sv_baseline > 0:
+        sv_change_pct = float((sv_current - sv_baseline) / sv_baseline * 100.0)
+    if ppv_baseline is not None and ppv_current is not None and ppv_baseline > 0:
+        ppv_change_pct = float((ppv_current - ppv_baseline) / ppv_baseline * 100.0)
+    if svr_baseline is not None and svr_current is not None and svr_baseline > 0:
+        svr_change_pct = float((svr_current - svr_baseline) / svr_baseline * 100.0)
+    if rso2_l_baseline is not None and rso2_l_current is not None and rso2_l_baseline > 0:
+        rso2_l_drop_pct = float((rso2_l_baseline - rso2_l_current) / rso2_l_baseline * 100.0)
+    if rso2_r_baseline is not None and rso2_r_current is not None and rso2_r_baseline > 0:
+        rso2_r_drop_pct = float((rso2_r_baseline - rso2_r_current) / rso2_r_baseline * 100.0)
 
     return {
         "baseline_window_start_sec": float(base_start),
@@ -2936,10 +3992,120 @@ def build_baseline_comparison(
         "MAP_baseline_mmhg": mbp_baseline,
         "MAP_current_mmhg": mbp_current,
         "MAP_drop_from_baseline_pct": map_drop_pct,
+        "SBP_baseline_mmhg": sbp_baseline,
+        "SBP_current_mmhg": sbp_current,
+        "SBP_change_from_baseline_pct": sbp_change_pct,
+        "DBP_baseline_mmhg": dbp_baseline,
+        "DBP_current_mmhg": dbp_current,
+        "DBP_change_from_baseline_pct": dbp_change_pct,
         "HR_baseline_bpm": hr_baseline,
         "HR_current_bpm": hr_current,
         "HR_change_from_baseline_pct": hr_change_pct,
+        "SpO2_baseline_pct": spo2_baseline,
+        "SpO2_current_pct": spo2_current,
+        "SpO2_drop_from_baseline_pct": spo2_drop_pct,
+        "EtCO2_baseline_mmhg": etco2_baseline,
+        "EtCO2_current_mmhg": etco2_current,
+        "EtCO2_change_from_baseline_pct": etco2_change_pct,
+        "CO_baseline_L_min": co_baseline,
+        "CO_current_L_min": co_current,
+        "CO_change_from_baseline_pct": co_change_pct,
+        "CI_baseline_L_min_m2": ci_baseline,
+        "CI_current_L_min_m2": ci_current,
+        "CI_change_from_baseline_pct": ci_change_pct,
+        "SV_baseline_ml": sv_baseline,
+        "SV_current_ml": sv_current,
+        "SV_change_from_baseline_pct": sv_change_pct,
+        "PPV_baseline_pct": ppv_baseline,
+        "PPV_current_pct": ppv_current,
+        "PPV_change_from_baseline_pct": ppv_change_pct,
+        "SVR_baseline_dyns_cm5": svr_baseline,
+        "SVR_current_dyns_cm5": svr_current,
+        "SVR_change_from_baseline_pct": svr_change_pct,
+        "BT_baseline_c": bt_baseline,
+        "BT_current_c": bt_current,
+        "rSO2_L_baseline_pct": rso2_l_baseline,
+        "rSO2_L_current_pct": rso2_l_current,
+        "rSO2_L_drop_from_baseline_pct": rso2_l_drop_pct,
+        "rSO2_R_baseline_pct": rso2_r_baseline,
+        "rSO2_R_current_pct": rso2_r_current,
+        "rSO2_R_drop_from_baseline_pct": rso2_r_drop_pct,
     }
+
+
+def _build_personalized_thresholds(
+    baseline_comparison: Optional[Dict[str, Optional[float]]],
+) -> Dict[str, float]:
+    out = {
+        "map_low_mmhg": float(ANES_THRESHOLDS["map_hypotension_mmhg"]),
+        "hr_tachycardia_bpm": float(ANES_THRESHOLDS["hr_tachycardia_bpm"]),
+        "hr_bradycardia_bpm": float(ANES_THRESHOLDS["hr_bradycardia_bpm"]),
+        "map_relative_drop_pct": float(ANES_THRESHOLDS["map_relative_drop_pct"]),
+        "sbp_relative_change_pct": float(ANES_THRESHOLDS["sbp_relative_change_pct"]),
+        "dbp_relative_change_pct": float(ANES_THRESHOLDS["dbp_relative_change_pct"]),
+        "hr_relative_change_pct": float(ANES_THRESHOLDS["hr_relative_change_pct"]),
+        "spo2_low_pct": float(ANES_THRESHOLDS["spo2_severe_low_pct"]),
+        "spo2_attention_pct": float(ANES_THRESHOLDS["spo2_attention_pct"]),
+        "spo2_drop_from_baseline_pct": float(ANES_THRESHOLDS["spo2_drop_from_baseline_pct"]),
+        "spo2_attention_persist_sec": float(ANES_THRESHOLDS["spo2_attention_persist_sec"]),
+        "etco2_missing_alert_sec": float(ANES_THRESHOLDS["etco2_missing_alert_sec"]),
+        "bt_low_c": float(ANES_THRESHOLDS["bt_low_c"]),
+        "bt_high_fever_c": float(ANES_THRESHOLDS["bt_fever_c"]),
+        "bt_high_critical_c": float(ANES_THRESHOLDS["bt_high_fever_c"]),
+        "bis_low": float(ANES_THRESHOLDS["bis_deep"]),
+        "bis_high": float(ANES_THRESHOLDS["bis_light"]),
+        "rso2_low_pct": float(ANES_THRESHOLDS["rso2_low_abs_pct"]),
+        "rso2_drop_from_baseline_pct": float(ANES_THRESHOLDS["rso2_drop_from_baseline_pct"]),
+        "co_low": float(ANES_THRESHOLDS["co_low_l_min"]),
+        "co_high": float(ANES_THRESHOLDS["co_high_l_min"]),
+        "ci_low": float(ANES_THRESHOLDS["ci_low_l_min_m2"]),
+        "ci_high": float(ANES_THRESHOLDS["ci_high_l_min_m2"]),
+        "sv_low": float(ANES_THRESHOLDS["sv_low_ml"]),
+        "sv_high": float(ANES_THRESHOLDS["sv_high_ml"]),
+        "svv_high": float(ANES_THRESHOLDS["svv_high_pct"]),
+        "cvp_low": float(ANES_THRESHOLDS["cvp_low_mmhg"]),
+        "cvp_high": float(ANES_THRESHOLDS["cvp_high_mmhg"]),
+        "svr_low": float(ANES_THRESHOLDS["svr_low_dyns_cm5"]),
+        "svr_high": float(ANES_THRESHOLDS["svr_high_dyns_cm5"]),
+        "abg_missing_alert_sec": 8.0,
+    }
+    if not baseline_comparison:
+        return out
+
+    hr_baseline = _safe_float(baseline_comparison.get("HR_baseline_bpm"))
+    spo2_baseline = _safe_float(baseline_comparison.get("SpO2_baseline_pct"))
+    rso2_l_baseline = _safe_float(baseline_comparison.get("rSO2_L_baseline_pct"))
+    rso2_r_baseline = _safe_float(baseline_comparison.get("rSO2_R_baseline_pct"))
+
+    # Patient-personalized HR change threshold: tachy/brady-prone baselines are monitored more sensitively.
+    if hr_baseline is not None:
+        if hr_baseline <= 55.0 or hr_baseline >= 95.0:
+            out["hr_relative_change_pct"] = 15.0
+        elif hr_baseline >= 80.0:
+            out["hr_relative_change_pct"] = 18.0
+
+    # Patient-personalized SpO2 sensitivity:
+    # high baseline oxygenation should trigger attention with smaller relative drops.
+    if spo2_baseline is not None:
+        if spo2_baseline >= 98.0:
+            out["spo2_drop_from_baseline_pct"] = 3.0
+            out["spo2_attention_pct"] = 95.0
+        elif spo2_baseline >= 96.0:
+            out["spo2_drop_from_baseline_pct"] = 3.5
+            out["spo2_attention_pct"] = 94.5
+        elif spo2_baseline <= 95.0:
+            out["spo2_drop_from_baseline_pct"] = 2.0
+            out["spo2_attention_pct"] = 94.0
+
+    rso2_baselines = [v for v in [rso2_l_baseline, rso2_r_baseline] if v is not None]
+    if rso2_baselines:
+        base_min = min(rso2_baselines)
+        if base_min < 60.0:
+            out["rso2_drop_from_baseline_pct"] = 15.0
+        elif base_min >= 70.0:
+            out["rso2_drop_from_baseline_pct"] = 20.0
+
+    return out
 
 
 def build_clinical_assessment(
@@ -2949,13 +4115,46 @@ def build_clinical_assessment(
 ) -> Dict[str, Any]:
     hr_s = _safe_get_series(df_window, "HR")
     mbp_s = _safe_get_series(df_window, "MBP")
+    sbp_s = _safe_get_series(df_window, "SBP")
+    dbp_s = _safe_get_series(df_window, "DBP")
     spo2_s = _safe_get_series(df_window, "SPO2")
     bis_s = _safe_get_series(df_window, "BIS")
+    etco2_s = _safe_get_series(df_window, "ETCO2")
+    svv_s = _safe_get_series(df_window, "SVV")
+    ppv_s = _safe_get_series(df_window, "PPV")
+    cvp_s = _safe_get_series(df_window, "CVP")
+    co_s = _safe_get_series(df_window, "CO")
+    ci_s = _safe_get_series(df_window, "CI")
+    sv_s = _safe_get_series(df_window, "SV")
+    svr_s = _safe_get_series(df_window, "SVR")
+    bt_s = _safe_get_series(df_window, "BT")
+    rso2_l_s = _safe_get_series(df_window, "RSO2_L")
+    rso2_r_s = _safe_get_series(df_window, "RSO2_R")
 
     hr_last = _last_window_mean(hr_s, vital_key="HR") if hr_s is not None else None
     mbp_last = _last_window_mean(mbp_s, vital_key="MBP") if mbp_s is not None else None
+    sbp_last = _last_window_mean(sbp_s, vital_key="SBP") if sbp_s is not None else None
+    dbp_last = _last_window_mean(dbp_s, vital_key="DBP") if dbp_s is not None else None
     spo2_last = _last_window_mean(spo2_s, vital_key="SPO2") if spo2_s is not None else None
     bis_last = _last_window_mean(bis_s, vital_key="BIS") if bis_s is not None else None
+    etco2_last = _last_window_mean(etco2_s, vital_key="ETCO2") if etco2_s is not None else None
+    svv_last = _last_window_mean(svv_s, vital_key="SVV") if svv_s is not None else None
+    ppv_last = _last_window_mean(ppv_s, vital_key="PPV") if ppv_s is not None else None
+    cvp_last = _last_window_mean(cvp_s, vital_key="CVP") if cvp_s is not None else None
+    co_last = _last_window_mean(co_s, vital_key="CO") if co_s is not None else None
+    ci_last = _last_window_mean(ci_s, vital_key="CI") if ci_s is not None else None
+    sv_last = _last_window_mean(sv_s, vital_key="SV") if sv_s is not None else None
+    svr_last = _last_window_mean(svr_s, vital_key="SVR") if svr_s is not None else None
+    bt_last = _last_window_mean(bt_s, vital_key="BT") if bt_s is not None else None
+    rso2_l_last = _last_window_mean(rso2_l_s, vital_key="RSO2_L") if rso2_l_s is not None else None
+    rso2_r_last = _last_window_mean(rso2_r_s, vital_key="RSO2_R") if rso2_r_s is not None else None
+    personalized = _build_personalized_thresholds(baseline_comparison)
+    hr_relative_limit = float(personalized["hr_relative_change_pct"])
+    spo2_attention_limit = float(personalized["spo2_attention_pct"])
+    spo2_drop_limit = float(personalized["spo2_drop_from_baseline_pct"])
+    spo2_attention_persist_limit = float(personalized["spo2_attention_persist_sec"])
+    map_relative_drop_limit = float(personalized["map_relative_drop_pct"])
+    rso2_drop_limit = float(personalized["rso2_drop_from_baseline_pct"])
 
     decision_windows = {
         "critical_window_sec": float(ANES_THRESHOLDS["critical_window_sec"]),
@@ -2971,6 +4170,26 @@ def build_clinical_assessment(
         df_window=df_window,
         vital_key="MBP",
         predicate=lambda s: s < ANES_THRESHOLDS["map_hypotension_mmhg"],
+    )
+    sbp_low_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="SBP",
+        predicate=lambda s: s < ANES_THRESHOLDS["sbp_low_mmhg"],
+    )
+    sbp_high_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="SBP",
+        predicate=lambda s: s > ANES_THRESHOLDS["sbp_high_mmhg"],
+    )
+    dbp_low_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="DBP",
+        predicate=lambda s: s < ANES_THRESHOLDS["dbp_low_mmhg"],
+    )
+    dbp_high_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="DBP",
+        predicate=lambda s: s > ANES_THRESHOLDS["dbp_high_mmhg"],
     )
     hr_tachy_persist_sec = _tail_persistence_by_vital(
         df_window=df_window,
@@ -2992,6 +4211,11 @@ def build_clinical_assessment(
         vital_key="SPO2",
         predicate=lambda s: s < ANES_THRESHOLDS["spo2_low_pct"],
     )
+    spo2_attention_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="SPO2",
+        predicate=lambda s: s <= spo2_attention_limit,
+    )
     bis_high_persist_sec = _tail_persistence_by_vital(
         df_window=df_window,
         vital_key="BIS",
@@ -3002,11 +4226,121 @@ def build_clinical_assessment(
         vital_key="BIS",
         predicate=lambda s: s < ANES_THRESHOLDS["bis_deep"],
     )
+    etco2_low_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="ETCO2",
+        predicate=lambda s: s < ANES_THRESHOLDS["etco2_low_mmhg"],
+    )
+    etco2_high_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="ETCO2",
+        predicate=lambda s: s > ANES_THRESHOLDS["etco2_high_mmhg"],
+    )
+    etco2_severe_low_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="ETCO2",
+        predicate=lambda s: s < ANES_THRESHOLDS["etco2_severe_low_mmhg"],
+    )
+    etco2_severe_high_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="ETCO2",
+        predicate=lambda s: s > ANES_THRESHOLDS["etco2_severe_high_mmhg"],
+    )
+    etco2_missing_persist_sec = _tail_missing_duration_by_vital(
+        df_window=df_window,
+        vital_key="ETCO2",
+    )
+    etco2_zero_like_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="ETCO2",
+        predicate=lambda s: s <= ANES_THRESHOLDS["etco2_zeroing_value_mmhg"],
+    )
+    bt_low_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="BT",
+        predicate=lambda s: s < ANES_THRESHOLDS["bt_low_c"],
+    )
+    bt_fever_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="BT",
+        predicate=lambda s: s > ANES_THRESHOLDS["bt_fever_c"],
+    )
+    bt_high_fever_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="BT",
+        predicate=lambda s: s >= ANES_THRESHOLDS["bt_high_fever_c"],
+    )
+    rso2_l_low_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="RSO2_L",
+        predicate=lambda s: s < ANES_THRESHOLDS["rso2_low_abs_pct"],
+    )
+    rso2_r_low_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="RSO2_R",
+        predicate=lambda s: s < ANES_THRESHOLDS["rso2_low_abs_pct"],
+    )
+    co_low_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="CO",
+        predicate=lambda s: s < ANES_THRESHOLDS["co_low_l_min"],
+    )
+    co_high_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="CO",
+        predicate=lambda s: s > ANES_THRESHOLDS["co_high_l_min"],
+    )
+    ci_low_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="CI",
+        predicate=lambda s: s < ANES_THRESHOLDS["ci_low_l_min_m2"],
+    )
+    ci_high_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="CI",
+        predicate=lambda s: s > ANES_THRESHOLDS["ci_high_l_min_m2"],
+    )
+    sv_low_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="SV",
+        predicate=lambda s: s < ANES_THRESHOLDS["sv_low_ml"],
+    )
+    sv_high_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="SV",
+        predicate=lambda s: s > ANES_THRESHOLDS["sv_high_ml"],
+    )
+    ppv_high_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="PPV",
+        predicate=lambda s: s >= ANES_THRESHOLDS["ppv_high_pct"],
+    )
+    ppv_severe_high_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="PPV",
+        predicate=lambda s: s >= ANES_THRESHOLDS["ppv_severe_high_pct"],
+    )
+    svr_low_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="SVR",
+        predicate=lambda s: s < ANES_THRESHOLDS["svr_low_dyns_cm5"],
+    )
+    svr_high_persist_sec = _tail_persistence_by_vital(
+        df_window=df_window,
+        vital_key="SVR",
+        predicate=lambda s: s > ANES_THRESHOLDS["svr_high_dyns_cm5"],
+    )
 
     flags: List[str] = []
     contextual_interpretation: List[str] = []
     map_absolute_triggered = False
     map_relative_triggered = False
+    sbp_relative_triggered = False
+    dbp_relative_triggered = False
+    hr_relative_triggered = False
+    spo2_relative_triggered = False
+    rso2_relative_triggered = False
+    critical_alarm = False
 
     if mbp_last is not None:
         if map_severe_persist_sec >= decision_windows["critical_window_sec"]:
@@ -3014,6 +4348,7 @@ def build_clinical_assessment(
                 f"重度低血压（MAP < 55 mmHg，持续约{map_severe_persist_sec:.0f}s，>= {decision_windows['critical_window_sec']:.0f}s）"
             )
             map_absolute_triggered = True
+            critical_alarm = True
         elif map_low_persist_sec >= decision_windows["hemodynamic_window_sec"]:
             flags.append(
                 f"低血压（MAP < 65 mmHg，持续约{map_low_persist_sec:.0f}s，>= {decision_windows['hemodynamic_window_sec']:.0f}s）"
@@ -3024,25 +4359,140 @@ def build_clinical_assessment(
                 f"MAP低于65但持续不足{decision_windows['hemodynamic_window_sec']:.0f}s（早期预警）"
             )
 
+    if sbp_last is not None:
+        if sbp_low_persist_sec >= decision_windows["hemodynamic_window_sec"]:
+            flags.append(
+                f"SBP偏低（< {ANES_THRESHOLDS['sbp_low_mmhg']:.0f} mmHg，持续约{sbp_low_persist_sec:.0f}s）"
+            )
+        elif sbp_high_persist_sec >= decision_windows["hemodynamic_window_sec"]:
+            flags.append(
+                f"SBP偏高（> {ANES_THRESHOLDS['sbp_high_mmhg']:.0f} mmHg，持续约{sbp_high_persist_sec:.0f}s）"
+            )
+        elif sbp_last < ANES_THRESHOLDS["sbp_low_mmhg"] or sbp_last > ANES_THRESHOLDS["sbp_high_mmhg"]:
+            flags.append(
+                f"SBP超出常规范围（{sbp_last:.1f} mmHg）"
+            )
+
+    if dbp_last is not None:
+        if dbp_low_persist_sec >= decision_windows["hemodynamic_window_sec"]:
+            flags.append(
+                f"DBP偏低（< {ANES_THRESHOLDS['dbp_low_mmhg']:.0f} mmHg，持续约{dbp_low_persist_sec:.0f}s）"
+            )
+        elif dbp_high_persist_sec >= decision_windows["hemodynamic_window_sec"]:
+            flags.append(
+                f"DBP偏高（> {ANES_THRESHOLDS['dbp_high_mmhg']:.0f} mmHg，持续约{dbp_high_persist_sec:.0f}s）"
+            )
+        elif dbp_last < ANES_THRESHOLDS["dbp_low_mmhg"] or dbp_last > ANES_THRESHOLDS["dbp_high_mmhg"]:
+            flags.append(
+                f"DBP超出常规范围（{dbp_last:.1f} mmHg）"
+            )
+
     if hr_last is not None:
         if hr_tachy_persist_sec >= decision_windows["hemodynamic_window_sec"]:
             flags.append(
                 f"心动过速（HR > 100 bpm，持续约{hr_tachy_persist_sec:.0f}s）"
             )
+            if hr_last >= 120.0:
+                critical_alarm = True
         elif hr_brady_persist_sec >= decision_windows["hemodynamic_window_sec"]:
             flags.append(
                 f"心动过缓（HR < 50 bpm，持续约{hr_brady_persist_sec:.0f}s）"
             )
+            if hr_last <= 40.0:
+                critical_alarm = True
 
     if spo2_last is not None:
-        if spo2_severe_persist_sec >= decision_windows["critical_window_sec"]:
+        if spo2_last < ANES_THRESHOLDS["spo2_severe_low_pct"]:
+            flags.append(
+                f"重度低氧血症（SpO2 < 90%，当前约{spo2_last:.1f}%）"
+            )
+            critical_alarm = True
+        elif spo2_severe_persist_sec >= decision_windows["critical_window_sec"]:
             flags.append(
                 f"重度低氧血症（SpO2 < 90%，持续约{spo2_severe_persist_sec:.0f}s）"
             )
+            critical_alarm = True
         elif spo2_low_persist_sec >= decision_windows["hemodynamic_window_sec"]:
             flags.append(
                 f"血氧下降（SpO2 < 94%，持续约{spo2_low_persist_sec:.0f}s）"
             )
+        elif spo2_attention_persist_sec >= spo2_attention_persist_limit:
+            flags.append(
+                f"SpO2高敏感持续预警（≤{spo2_attention_limit:.1f}%，持续约{spo2_attention_persist_sec:.0f}s）"
+            )
+        elif spo2_last <= spo2_attention_limit:
+            flags.append(
+                f"SpO2处于高敏感预警区（≤{spo2_attention_limit:.1f}%），需严密观察呼吸道与通气状态"
+            )
+
+    etco2_missing_alert_sec = float(ANES_THRESHOLDS["etco2_missing_alert_sec"])
+    etco2_zeroing_hint_sec = float(ANES_THRESHOLDS["etco2_zeroing_hint_sec"])
+    etco2_zeroing_suspected = (
+        etco2_missing_persist_sec >= etco2_missing_alert_sec
+        and etco2_zero_like_persist_sec >= etco2_zeroing_hint_sec
+    )
+    if etco2_missing_persist_sec >= etco2_missing_alert_sec:
+        if etco2_zeroing_suspected:
+            flags.append(
+                f"EtCO2信号缺失（约{etco2_missing_persist_sec:.0f}s），前序出现近零值，疑似监测校零/复位"
+            )
+        else:
+            flags.append(
+                f"EtCO2信号持续缺失（约{etco2_missing_persist_sec:.0f}s，除校零外需立即排查气道/回路）"
+            )
+            critical_alarm = True
+    elif etco2_severe_low_persist_sec >= decision_windows["critical_window_sec"]:
+        flags.append(
+            f"EtCO2重度异常偏低（<{ANES_THRESHOLDS['etco2_severe_low_mmhg']:.0f} mmHg，持续约{etco2_severe_low_persist_sec:.0f}s）"
+        )
+        critical_alarm = True
+    elif etco2_severe_high_persist_sec >= decision_windows["critical_window_sec"]:
+        flags.append(
+            f"EtCO2重度异常偏高（>{ANES_THRESHOLDS['etco2_severe_high_mmhg']:.0f} mmHg，持续约{etco2_severe_high_persist_sec:.0f}s）"
+        )
+        critical_alarm = True
+    elif etco2_low_persist_sec >= decision_windows["hemodynamic_window_sec"]:
+        flags.append(
+            f"EtCO2偏低（<{ANES_THRESHOLDS['etco2_low_mmhg']:.0f} mmHg，持续约{etco2_low_persist_sec:.0f}s）"
+        )
+    elif etco2_high_persist_sec >= decision_windows["hemodynamic_window_sec"]:
+        flags.append(
+            f"EtCO2偏高（>{ANES_THRESHOLDS['etco2_high_mmhg']:.0f} mmHg，持续约{etco2_high_persist_sec:.0f}s）"
+        )
+
+    if bt_last is not None:
+        if bt_low_persist_sec >= decision_windows["hemodynamic_window_sec"]:
+            flags.append(
+                f"低体温（BT < {ANES_THRESHOLDS['bt_low_c']:.1f}℃，持续约{bt_low_persist_sec:.0f}s）"
+            )
+        elif bt_high_fever_persist_sec >= decision_windows["critical_window_sec"]:
+            flags.append(
+                f"高热（BT ≥ {ANES_THRESHOLDS['bt_high_fever_c']:.1f}℃，持续约{bt_high_fever_persist_sec:.0f}s）"
+            )
+            critical_alarm = True
+        elif bt_fever_persist_sec >= decision_windows["hemodynamic_window_sec"]:
+            flags.append(
+                f"发热（BT > {ANES_THRESHOLDS['bt_fever_c']:.1f}℃，持续约{bt_fever_persist_sec:.0f}s）"
+            )
+
+    rso2_vals = [v for v in [rso2_l_last, rso2_r_last] if v is not None]
+    rso2_min_last = min(rso2_vals) if rso2_vals else None
+    if rso2_min_last is not None:
+        if rso2_min_last < ANES_THRESHOLDS["rso2_low_abs_pct"]:
+            flags.append(
+                f"脑氧饱和度异常（rSO2最小约{rso2_min_last:.1f}% < {ANES_THRESHOLDS['rso2_low_abs_pct']:.0f}%）"
+            )
+        elif rso2_min_last < ANES_THRESHOLDS["rso2_warn_abs_pct"]:
+            flags.append(
+                f"脑氧饱和度偏低预警（rSO2最小约{rso2_min_last:.1f}%）"
+            )
+    if (
+        rso2_l_low_persist_sec >= decision_windows["hemodynamic_window_sec"]
+        or rso2_r_low_persist_sec >= decision_windows["hemodynamic_window_sec"]
+    ):
+        flags.append(
+            f"rSO2持续低值（L约{rso2_l_low_persist_sec:.0f}s, R约{rso2_r_low_persist_sec:.0f}s）"
+        )
 
     if bis_last is not None:
         if bis_high_persist_sec >= decision_windows["slow_trend_window_sec"]:
@@ -3061,28 +4511,157 @@ def build_clinical_assessment(
         flags.append("BIS 数据缺失（优先依据MAP/HR/SpO2趋势和手术刺激评估）")
 
     map_drop_pct = None
+    sbp_change_pct = None
+    dbp_change_pct = None
+    hr_change_pct = None
+    spo2_drop_pct = None
+    co_change_pct = None
+    ci_change_pct = None
+    sv_change_pct = None
+    ppv_change_pct = None
+    svr_change_pct = None
+    rso2_l_drop_pct = None
+    rso2_r_drop_pct = None
     if baseline_comparison:
         map_drop_pct = baseline_comparison.get("MAP_drop_from_baseline_pct")
-        if map_drop_pct is not None and float(map_drop_pct) >= ANES_THRESHOLDS["map_relative_drop_pct"]:
+        sbp_change_pct = baseline_comparison.get("SBP_change_from_baseline_pct")
+        dbp_change_pct = baseline_comparison.get("DBP_change_from_baseline_pct")
+        hr_change_pct = baseline_comparison.get("HR_change_from_baseline_pct")
+        spo2_drop_pct = baseline_comparison.get("SpO2_drop_from_baseline_pct")
+        co_change_pct = baseline_comparison.get("CO_change_from_baseline_pct")
+        ci_change_pct = baseline_comparison.get("CI_change_from_baseline_pct")
+        sv_change_pct = baseline_comparison.get("SV_change_from_baseline_pct")
+        ppv_change_pct = baseline_comparison.get("PPV_change_from_baseline_pct")
+        svr_change_pct = baseline_comparison.get("SVR_change_from_baseline_pct")
+        rso2_l_drop_pct = baseline_comparison.get("rSO2_L_drop_from_baseline_pct")
+        rso2_r_drop_pct = baseline_comparison.get("rSO2_R_drop_from_baseline_pct")
+        if map_drop_pct is not None and float(map_drop_pct) >= map_relative_drop_limit:
             map_relative_triggered = True
             flags.append(f"MAP较基线下降明显（{float(map_drop_pct):.1f}%）")
+        if sbp_change_pct is not None and abs(float(sbp_change_pct)) >= ANES_THRESHOLDS["sbp_relative_change_pct"]:
+            sbp_relative_triggered = True
+            trend_txt = "升高" if float(sbp_change_pct) > 0 else "下降"
+            flags.append(f"SBP较基线{trend_txt}明显（{abs(float(sbp_change_pct)):.1f}%）")
+        if dbp_change_pct is not None and abs(float(dbp_change_pct)) >= ANES_THRESHOLDS["dbp_relative_change_pct"]:
+            dbp_relative_triggered = True
+            trend_txt = "升高" if float(dbp_change_pct) > 0 else "下降"
+            flags.append(f"DBP较基线{trend_txt}明显（{abs(float(dbp_change_pct)):.1f}%）")
+        if hr_change_pct is not None and abs(float(hr_change_pct)) >= hr_relative_limit:
+            hr_relative_triggered = True
+            trend_txt = "升高" if float(hr_change_pct) > 0 else "下降"
+            flags.append(f"HR较基线{trend_txt}明显（{float(hr_change_pct):.1f}%）")
+        if (
+            spo2_drop_pct is not None
+            and float(spo2_drop_pct) >= spo2_drop_limit
+            and spo2_last is not None
+            and spo2_last <= spo2_attention_limit
+        ):
+            spo2_relative_triggered = True
+            flags.append(f"SpO2较基线下降明显（{float(spo2_drop_pct):.1f}%）")
+        if co_change_pct is not None and abs(float(co_change_pct)) >= 20.0:
+            trend_txt = "升高" if float(co_change_pct) > 0 else "下降"
+            flags.append(f"CO较基线{trend_txt}明显（{abs(float(co_change_pct)):.1f}%）")
+        if ci_change_pct is not None and abs(float(ci_change_pct)) >= 20.0:
+            trend_txt = "升高" if float(ci_change_pct) > 0 else "下降"
+            flags.append(f"CI较基线{trend_txt}明显（{abs(float(ci_change_pct)):.1f}%）")
+        if sv_change_pct is not None and abs(float(sv_change_pct)) >= 20.0:
+            trend_txt = "升高" if float(sv_change_pct) > 0 else "下降"
+            flags.append(f"SV较基线{trend_txt}明显（{abs(float(sv_change_pct)):.1f}%）")
+        if ppv_change_pct is not None and abs(float(ppv_change_pct)) >= 20.0:
+            trend_txt = "升高" if float(ppv_change_pct) > 0 else "下降"
+            flags.append(f"PPV较基线{trend_txt}明显（{abs(float(ppv_change_pct)):.1f}%）")
+        if svr_change_pct is not None and abs(float(svr_change_pct)) >= 20.0:
+            trend_txt = "升高" if float(svr_change_pct) > 0 else "下降"
+            flags.append(f"SVR较基线{trend_txt}明显（{abs(float(svr_change_pct)):.1f}%）")
+        rso2_drops = []
+        if rso2_l_drop_pct is not None:
+            rso2_drops.append(float(rso2_l_drop_pct))
+        if rso2_r_drop_pct is not None:
+            rso2_drops.append(float(rso2_r_drop_pct))
+        if rso2_drops and max(rso2_drops) >= rso2_drop_limit:
+            rso2_relative_triggered = True
+            flags.append(f"rSO2较基线下降明显（最大约{max(rso2_drops):.1f}%）")
 
     if map_absolute_triggered:
         flags.append("MAP绝对阈值触发：作为器官灌注底线优先处理")
     if map_relative_triggered:
         flags.append("MAP相对下降触发：用于个体化风险分层")
+    if sbp_relative_triggered:
+        flags.append("SBP相对变化触发：幅度达到临床关注阈值（≥30%）")
+    if dbp_relative_triggered:
+        flags.append("DBP相对变化触发：幅度达到临床关注阈值（≥30%）")
+    if hr_relative_triggered:
+        flags.append(f"HR相对变化触发：变化幅度达到个体化关注阈值（≥{hr_relative_limit:.0f}%）")
+    if spo2_relative_triggered:
+        flags.append("SpO2高敏相对下降触发：即使绝对值未<90也需提前干预")
+    if rso2_relative_triggered:
+        flags.append("rSO2相对下降触发：建议优先保障脑灌注与氧供")
+    if svv_last is not None and svv_last >= ANES_THRESHOLDS["svv_severe_high_pct"]:
+        flags.append(f"SVV明显升高（{svv_last:.1f}%）提示低容量/容量反应性强")
+    elif svv_last is not None and svv_last >= ANES_THRESHOLDS["svv_high_pct"]:
+        flags.append(f"SVV偏高（{svv_last:.1f}%），建议复核容量状态")
+    if ppv_last is not None and ppv_last >= ANES_THRESHOLDS["ppv_severe_high_pct"]:
+        flags.append(f"PPV明显升高（{ppv_last:.1f}%）提示容量反应性强")
+    elif ppv_last is not None and ppv_last >= ANES_THRESHOLDS["ppv_high_pct"]:
+        flags.append(f"PPV偏高（{ppv_last:.1f}%），建议优先评估容量状态")
+    if cvp_last is not None and cvp_last <= ANES_THRESHOLDS["cvp_low_mmhg"]:
+        flags.append(f"CVP偏低（{cvp_last:.1f} mmHg），需结合容量与回心血量评估")
+    elif cvp_last is not None and cvp_last >= ANES_THRESHOLDS["cvp_high_mmhg"]:
+        flags.append(f"CVP偏高（{cvp_last:.1f} mmHg），需评估右心负荷与液体管理")
+    if co_last is not None and co_low_persist_sec >= decision_windows["hemodynamic_window_sec"]:
+        flags.append(
+            f"CO偏低（<{ANES_THRESHOLDS['co_low_l_min']:.1f} L/min，持续约{co_low_persist_sec:.0f}s）"
+        )
+    elif co_last is not None and co_last < ANES_THRESHOLDS["co_low_l_min"]:
+        flags.append(f"CO短时偏低（当前约{co_last:.1f} L/min）")
+    elif co_last is not None and co_high_persist_sec >= decision_windows["slow_trend_window_sec"]:
+        flags.append(
+            f"CO持续偏高（>{ANES_THRESHOLDS['co_high_l_min']:.1f} L/min，持续约{co_high_persist_sec:.0f}s）"
+        )
+    if ci_last is not None and ci_low_persist_sec >= decision_windows["hemodynamic_window_sec"]:
+        flags.append(
+            f"CI偏低（<{ANES_THRESHOLDS['ci_low_l_min_m2']:.1f} L/(min·m²)，持续约{ci_low_persist_sec:.0f}s）"
+        )
+        if ci_last < 2.2:
+            critical_alarm = True
+    elif ci_last is not None and ci_last < ANES_THRESHOLDS["ci_low_l_min_m2"]:
+        flags.append(f"CI短时偏低（当前约{ci_last:.1f} L/(min·m²)）")
+    elif ci_last is not None and ci_high_persist_sec >= decision_windows["slow_trend_window_sec"]:
+        flags.append(
+            f"CI持续偏高（>{ANES_THRESHOLDS['ci_high_l_min_m2']:.1f} L/(min·m²)，持续约{ci_high_persist_sec:.0f}s）"
+        )
+    if sv_last is not None and sv_low_persist_sec >= decision_windows["hemodynamic_window_sec"]:
+        flags.append(
+            f"SV偏低（<{ANES_THRESHOLDS['sv_low_ml']:.0f} mL，持续约{sv_low_persist_sec:.0f}s）"
+        )
+    elif sv_last is not None and sv_last < ANES_THRESHOLDS["sv_low_ml"]:
+        flags.append(f"SV短时偏低（当前约{sv_last:.0f} mL）")
+    elif sv_last is not None and sv_high_persist_sec >= decision_windows["slow_trend_window_sec"]:
+        flags.append(
+            f"SV持续偏高（>{ANES_THRESHOLDS['sv_high_ml']:.0f} mL，持续约{sv_high_persist_sec:.0f}s）"
+        )
+    if svr_last is not None and svr_low_persist_sec >= decision_windows["hemodynamic_window_sec"]:
+        flags.append(
+            f"SVR偏低（<{ANES_THRESHOLDS['svr_low_dyns_cm5']:.0f} dyn·s·cm⁻5，持续约{svr_low_persist_sec:.0f}s）"
+        )
+    elif svr_last is not None and svr_last < ANES_THRESHOLDS["svr_low_dyns_cm5"]:
+        flags.append(f"SVR短时偏低（当前约{svr_last:.0f} dyn·s·cm⁻5）")
+    elif svr_last is not None and svr_high_persist_sec >= decision_windows["slow_trend_window_sec"]:
+        flags.append(
+            f"SVR持续偏高（>{ANES_THRESHOLDS['svr_high_dyns_cm5']:.0f} dyn·s·cm⁻5，持续约{svr_high_persist_sec:.0f}s）"
+        )
 
     med_key = str(anchor.get("medication_key", ""))
     anchor_source = str(anchor.get("anchor_source", "medication"))
     delta = _safe_float(anchor.get("delta"))
     intervention_hint = "未触发特定干预启发式。"
-    if med_key == "PHE_RATE":
+    if med_key in {"PHE_RATE", "PHE_VOL"}:
         intervention_hint = "去氧肾上腺素通常用于血管扩张相关低血压且心率不低的场景；若明显心动过缓需谨慎。"
     elif med_key in {"EPH_VOL", "EPH_RATE"}:
         intervention_hint = "麻黄碱更适合低血压合并低心率；若已明显心动过速应避免继续加量。"
-    elif med_key == "NOR_RATE":
+    elif med_key in {"NOR_RATE", "NOR_VOL"}:
         intervention_hint = "去甲肾上腺素用于难治性血管扩张性低血压；疑似低容量时应先扩容后升压。"
-    elif med_key == "EPI_RATE":
+    elif med_key in {"EPI_RATE", "EPI_VOL"}:
         intervention_hint = "肾上腺素主要用于抢救级循环衰竭场景；不宜作为常规轻中度低血压首选。"
     elif med_key in {"NTG_VOL", "NTG_RATE"}:
         intervention_hint = "硝酸甘油用于缺血/高血压/肺水肿场景；MAP偏低时可显著恶化循环，需谨慎。"
@@ -3090,7 +4669,7 @@ def build_clinical_assessment(
         intervention_hint = "米力农可改善低心排与肺高压，但有扩血管效应；低血压未纠正前避免升级。"
     elif med_key in {"ATRO_VOL", "ATRO_RATE"}:
         intervention_hint = "阿托品用于有血流动力学意义的严重心动过缓；非症状性慢心率不应机械使用。"
-    elif med_key == "PPF20_VOL":
+    elif med_key in {"PPF20_VOL", "PPF20_RATE"}:
         intervention_hint = "丙泊酚调整需先看灌注：当MAP已低时应先稳循环，再评估是否继续加深麻醉。"
     elif med_key in {"REMI_VOL", "REMI_RATE", "RFTN20_VOL", "RFTN50_VOL", "RFTN20_RATE", "RFTN50_RATE"}:
         intervention_hint = "阿片类调整常用于手术刺激上冲控制；需同步监测呼吸抑制、心动过缓与低血压。"
@@ -3136,48 +4715,482 @@ def build_clinical_assessment(
             and mbp_last < ANES_THRESHOLDS["map_hypotension_mmhg"]
         ):
             contextual_interpretation.append("BIS低+MAP低提示可能过深麻醉并低灌注，宜减浅麻醉并支持循环。")
+    if spo2_last is not None and spo2_last < ANES_THRESHOLDS["spo2_low_pct"]:
+        contextual_interpretation.append("SpO2下降提示需先保证气道和氧合，再讨论麻醉深度微调。")
+    if etco2_missing_persist_sec >= etco2_missing_alert_sec and not etco2_zeroing_suspected:
+        contextual_interpretation.append("EtCO2连续缺失高度提示呼吸回路/气道问题，应立即人工核查。")
+    elif etco2_missing_persist_sec >= etco2_missing_alert_sec and etco2_zeroing_suspected:
+        contextual_interpretation.append("EtCO2缺失前出现近零值，可能处于校零/复位过程，需快速复核监护状态。")
+    elif etco2_last is not None and etco2_last < ANES_THRESHOLDS["etco2_low_mmhg"]:
+        contextual_interpretation.append("EtCO2偏低需排查过度通气、低灌注或回路泄漏。")
+    elif etco2_last is not None and etco2_last > ANES_THRESHOLDS["etco2_high_mmhg"]:
+        contextual_interpretation.append("EtCO2偏高需警惕通气不足、二氧化碳潴留或气道阻力升高。")
+    if bt_last is not None and bt_last < ANES_THRESHOLDS["bt_low_c"]:
+        contextual_interpretation.append("体温低于36℃时需主动保温，避免凝血障碍和苏醒延迟。")
+    elif bt_last is not None and bt_last >= ANES_THRESHOLDS["bt_high_fever_c"]:
+        contextual_interpretation.append("术中高热需快速排查感染、输血反应或恶性高热相关风险。")
+    if rso2_vals and min(rso2_vals) < ANES_THRESHOLDS["rso2_low_abs_pct"]:
+        contextual_interpretation.append("rSO2异常提示脑灌注/氧供不足风险，应优先优化灌注和氧合。")
+    if ci_last is not None and ci_last < ANES_THRESHOLDS["ci_low_l_min_m2"]:
+        contextual_interpretation.append("CI偏低提示心排量不足，需结合容量状态、心肌抑制与后负荷综合判断。")
+    if ppv_last is not None and ppv_last >= ANES_THRESHOLDS["ppv_high_pct"]:
+        contextual_interpretation.append("PPV升高提示可能容量反应性，建议优先评估补液反应。")
+    if svr_last is not None and svr_last < ANES_THRESHOLDS["svr_low_dyns_cm5"]:
+        contextual_interpretation.append("SVR偏低提示外周血管扩张，需评估麻醉/炎症相关血流动力学改变。")
+    if not flags:
+        contextual_interpretation.append("当前样本属于维持期平稳体征，重点是监测与避免过度干预。")
 
     severity = "low"
-    if any(("重度" in f) or ("严重" in f) for f in flags):
+    if critical_alarm or any(("重度" in f) or ("严重" in f) for f in flags):
         severity = "high"
     elif flags:
         severity = "moderate"
+    sample_category = "stable_maintenance"
+    if severity == "high":
+        sample_category = "critical_alarm"
+    elif severity == "moderate":
+        sample_category = "warning_signal"
 
     return {
         "recent_state_mean": {
             "MAP_mmhg": mbp_last,
+            "SBP_mmhg": sbp_last,
+            "DBP_mmhg": dbp_last,
             "HR_bpm": hr_last,
             "SpO2_pct": spo2_last,
             "BIS": bis_last,
+            "EtCO2_mmhg": etco2_last,
+            "CO_L_min": co_last,
+            "CI_L_min_m2": ci_last,
+            "SV_ml": sv_last,
+            "SVV_pct": svv_last,
+            "PPV_pct": ppv_last,
+            "CVP_mmhg": cvp_last,
+            "SVR_dyns_cm5": svr_last,
+            "BT_c": bt_last,
+            "rSO2_L_pct": rso2_l_last,
+            "rSO2_R_pct": rso2_r_last,
         },
         "baseline_comparison": baseline_comparison if baseline_comparison is not None else {},
         "risk_flags": flags,
         "contextual_interpretation": contextual_interpretation,
         "risk_level": severity,
+        "sample_category": sample_category,
         "map_policy": {
             "absolute_primary": True,
             "relative_layered": True,
             "absolute_triggered": map_absolute_triggered,
             "relative_triggered": map_relative_triggered,
         },
+        "sensitivity_policy": {
+            "hr_relative_triggered": hr_relative_triggered,
+            "spo2_relative_triggered": spo2_relative_triggered,
+            "rso2_relative_triggered": rso2_relative_triggered,
+            "etco2_missing_triggered": etco2_missing_persist_sec >= etco2_missing_alert_sec,
+            "etco2_zeroing_suspected": etco2_zeroing_suspected,
+            "personalized_thresholds": personalized,
+            "bis_as_supportive_only": True,
+        },
         "persistence_seconds": {
             "map_lt_55": map_severe_persist_sec,
             "map_lt_65": map_low_persist_sec,
+            "sbp_lt_90": sbp_low_persist_sec,
+            "sbp_gt_180": sbp_high_persist_sec,
+            "dbp_lt_60": dbp_low_persist_sec,
+            "dbp_gt_100": dbp_high_persist_sec,
             "hr_gt_100": hr_tachy_persist_sec,
             "hr_lt_50": hr_brady_persist_sec,
             "spo2_lt_90": spo2_severe_persist_sec,
             "spo2_lt_94": spo2_low_persist_sec,
+            "spo2_le_attention": spo2_attention_persist_sec,
             "bis_gt_60": bis_high_persist_sec,
             "bis_lt_40": bis_low_persist_sec,
+            "etco2_missing": etco2_missing_persist_sec,
+            "etco2_zero_like": etco2_zero_like_persist_sec,
+            "etco2_lt_25": etco2_severe_low_persist_sec,
+            "etco2_lt_30": etco2_low_persist_sec,
+            "etco2_gt_50": etco2_high_persist_sec,
+            "etco2_gt_60": etco2_severe_high_persist_sec,
+            "co_lt_low": co_low_persist_sec,
+            "co_gt_high": co_high_persist_sec,
+            "ci_lt_low": ci_low_persist_sec,
+            "ci_gt_high": ci_high_persist_sec,
+            "sv_lt_low": sv_low_persist_sec,
+            "sv_gt_high": sv_high_persist_sec,
+            "ppv_ge_13": ppv_high_persist_sec,
+            "ppv_ge_18": ppv_severe_high_persist_sec,
+            "svr_lt_low": svr_low_persist_sec,
+            "svr_gt_high": svr_high_persist_sec,
+            "bt_lt_36": bt_low_persist_sec,
+            "bt_gt_37_5": bt_fever_persist_sec,
+            "bt_ge_38": bt_high_fever_persist_sec,
+            "rso2_l_lt_55": rso2_l_low_persist_sec,
+            "rso2_r_lt_55": rso2_r_low_persist_sec,
         },
         "decision_windows_sec": decision_windows,
         "intervention_consideration": intervention_hint,
         "missing_data_guidance": (
-            "If BIS data is missing, infer anesthesia depth from autonomic signs "
-            "(HR/MBP trends) and surgical stimulation context."
+            "When a physiologic indicator is unavailable, infer decisions from available objective signals "
+            "and avoid mentioning missing indicators in final Q/A text."
         ),
         "drug_reference": DRUG_REFERENCE,
     }
+
+
+def _row_numeric_by_keys(row: pd.Series, keys: Sequence[str]) -> Optional[float]:
+    for key in keys:
+        if key in row.index:
+            val = _safe_float(row.get(key))
+            if val is not None:
+                return float(val)
+    return None
+
+
+def _is_malignant_arrhythmia_text(text: str) -> bool:
+    low = str(text or "").lower()
+    if not low:
+        return False
+    malignant_patterns = [
+        r"\bvf\b",
+        r"\bvt\b",
+        r"\bvta\b",
+        r"ventricular fibrillation",
+        r"ventricular tachy",
+        r"\bnsvt\b",
+        r"torsade",
+        r"torsades",
+        r"asystole",
+        r"pulseless",
+        r"af with rvr",
+        r"afib with rvr",
+        r"atrial fibrillation with rapid",
+        r"atrial fibrillation.*rapid ventricular",
+        r"\bsvta\b",
+        r"\bsvt\b",
+        r"\bpsvt\b",
+        r"supraventricular tachy",
+        r"室颤",
+        r"室性心动过速",
+        r"室速",
+        r"房颤.*快心室率",
+        r"阵发性室上速",
+    ]
+    for pat in malignant_patterns:
+        if re.search(pat, low):
+            return True
+    return False
+
+
+def _is_arrhythmia_event_text(text: str) -> bool:
+    low = str(text or "").lower().strip()
+    if not low:
+        return False
+    if low in ARRDB_NORMAL_LABELS:
+        return False
+    rhythm_tokens = [t.strip() for t in re.split(r"[,;/]+", low) if t.strip()]
+    meaningful = []
+    for tok in rhythm_tokens:
+        if tok in ARRDB_NORMAL_LABELS:
+            continue
+        if tok in {"noise", "artifact"}:
+            continue
+        meaningful.append(tok)
+    if meaningful:
+        return True
+    return any(k in low for k in ["arrhythmia", "afib", "afl", "svt", "snd", "ventricular", "ectopy"])
+
+
+def _extract_adverse_events(
+    row: pd.Series,
+    anchor: Dict[str, Any],
+    clinical_assessment: Dict[str, Any],
+    patient_weight_kg: Optional[float],
+    ane_dur_min: Optional[float],
+) -> Dict[str, Any]:
+    flags: List[str] = []
+    event_types: List[str] = []
+    evidence: Dict[str, Any] = {}
+
+    def _add(event_type: str, flag: str, evidence_key: Optional[str] = None, evidence_value: Any = None) -> None:
+        if event_type and event_type not in event_types:
+            event_types.append(event_type)
+        if flag and flag not in flags:
+            flags.append(flag)
+        if evidence_key:
+            evidence[evidence_key] = evidence_value
+
+    ebl = _row_numeric_by_keys(row, ["intraop_ebl", "ebl", "blood_loss_ml"])
+    if ebl is not None:
+        evidence["ebl_ml"] = float(ebl)
+        if ebl >= 1000:
+            _add("major_bleeding", f"大出血风险（术中估计失血量约{ebl:.0f} mL）")
+        elif ebl >= 500:
+            _add("bleeding_warning", f"出血偏多预警（术中估计失血量约{ebl:.0f} mL）")
+
+    uo = _row_numeric_by_keys(row, ["intraop_uo", "uo", "urine_output_ml"])
+    if uo is not None:
+        evidence["urine_output_ml"] = float(uo)
+        if uo <= 5:
+            _add("anuria_critical", f"危重少尿/无尿预警（术中尿量约{uo:.1f} mL）")
+        elif patient_weight_kg is not None and ane_dur_min is not None and ane_dur_min > 0:
+            uo_rate = float(uo) / max(0.1, patient_weight_kg) / max(0.1, ane_dur_min / 60.0)
+            evidence["urine_output_ml_per_kg_h"] = float(uo_rate)
+            if uo_rate < 0.5:
+                _add("oliguria_warning", f"尿量偏低预警（约{uo_rate:.2f} mL/kg/h）")
+
+    potassium = _row_numeric_by_keys(
+        row,
+        ["abga_k", "lab_k", "potassium", "intraop_k", "k_value", "preop_k"],
+    )
+    if potassium is not None:
+        evidence["potassium"] = float(potassium)
+        if potassium >= 5.8:
+            _add("hyperkalemia_critical", f"高钾危急值风险（K≈{potassium:.2f}）")
+        elif potassium <= 3.0:
+            _add("hypokalemia_critical", f"低钾危急值风险（K≈{potassium:.2f}）")
+
+    glucose = _row_numeric_by_keys(
+        row,
+        ["abga_glucose", "lab_glucose", "glucose", "glu", "intraop_glucose", "preop_gluc"],
+    )
+    if glucose is not None:
+        evidence["glucose"] = float(glucose)
+        if glucose >= 250:
+            _add("hyperglycemia_severe", f"高血糖明显异常（Glu≈{glucose:.0f}）")
+        elif glucose >= 180:
+            _add("hyperglycemia_warning", f"高血糖预警（Glu≈{glucose:.0f}）")
+
+    pao2 = _row_numeric_by_keys(
+        row,
+        ["abga_pao2", "lab_pao2", "pao2", "pao2_mmHg", "intraop_pao2", "preop_pao2"],
+    )
+    if pao2 is not None:
+        evidence["pao2"] = float(pao2)
+        if pao2 < 60:
+            _add("abg_hypoxemia", f"ABG低氧血症风险（PaO2≈{pao2:.0f} mmHg）")
+
+    paco2 = _row_numeric_by_keys(
+        row,
+        ["abga_paco2", "lab_paco2", "paco2", "paco2_mmHg", "intraop_paco2", "preop_paco2"],
+    )
+    if paco2 is not None:
+        evidence["paco2"] = float(paco2)
+        if paco2 > 60:
+            _add("abg_hypercapnia", f"ABG二氧化碳潴留风险（PaCO2≈{paco2:.0f} mmHg）")
+        elif paco2 > 50:
+            _add("abg_hypercapnia", f"ABG通气不足预警（PaCO2≈{paco2:.0f} mmHg）")
+
+    ph = _row_numeric_by_keys(
+        row,
+        ["abga_ph", "lab_ph", "ph", "intraop_ph", "preop_ph"],
+    )
+    lactate = _row_numeric_by_keys(
+        row,
+        ["abga_lactate", "lab_lactate", "lactate", "lac", "intraop_lactate"],
+    )
+    be = _row_numeric_by_keys(
+        row,
+        ["abga_be", "lab_be", "be", "base_excess", "intraop_be", "preop_be"],
+    )
+    if ph is not None:
+        evidence["ph"] = float(ph)
+    if lactate is not None:
+        evidence["lactate"] = float(lactate)
+    if be is not None:
+        evidence["be"] = float(be)
+
+    severe_acidosis_pattern = (
+        ph is not None
+        and ph < 7.25
+        and lactate is not None
+        and lactate >= 2.5
+    )
+    if severe_acidosis_pattern:
+        _add(
+            "abg_metabolic_acidosis_hyperlactatemia",
+            f"ABG酸中毒+高乳酸风险（pH≈{ph:.2f}, Lactate≈{lactate:.1f}）",
+        )
+    else:
+        if ph is not None and ph < 7.30:
+            _add("abg_metabolic_acidosis_warning", f"ABG酸中毒预警（pH≈{ph:.2f}）")
+        if lactate is not None and lactate >= 2.0:
+            _add("abg_metabolic_acidosis_warning", f"ABG乳酸升高预警（Lactate≈{lactate:.1f}）")
+    if be is not None and be <= -8.0:
+        _add("abg_be_negative_large", f"ABG碱剩余显著负值（BE≈{be:.1f}）")
+
+    teg_r = _row_numeric_by_keys(
+        row,
+        ["teg_r", "teg_r_min", "teg_rtime"],
+    )
+    teg_ma = _row_numeric_by_keys(
+        row,
+        ["teg_ma", "teg_ma_mm", "teg_max_amplitude"],
+    )
+    teg_k = _row_numeric_by_keys(
+        row,
+        ["teg_k", "teg_k_min", "teg_ktime"],
+    )
+    teg_ci = _row_numeric_by_keys(
+        row,
+        ["teg_ci", "teg_coag_index", "teg_coagulation_index"],
+    )
+    if teg_r is not None:
+        evidence["teg_r"] = float(teg_r)
+        if teg_r > 10:
+            _add("coagulation_low", f"TEG低凝风险（R≈{teg_r:.1f} min）")
+        elif teg_r < 5:
+            _add("coagulation_high", f"TEG高凝风险（R≈{teg_r:.1f} min）")
+    if teg_ma is not None:
+        evidence["teg_ma"] = float(teg_ma)
+        if teg_ma < 50:
+            _add("coagulation_low", f"TEG低凝/血小板功能不足风险（MA≈{teg_ma:.1f} mm）")
+        elif teg_ma > 70:
+            _add("coagulation_high", f"TEG高凝风险（MA≈{teg_ma:.1f} mm）")
+    if teg_k is not None:
+        evidence["teg_k"] = float(teg_k)
+        if teg_k > 3:
+            _add("coagulation_low", f"TEG低凝风险（K≈{teg_k:.1f} min）")
+        elif teg_k < 1:
+            _add("coagulation_high", f"TEG高凝风险（K≈{teg_k:.1f} min）")
+    if teg_ci is not None:
+        evidence["teg_ci"] = float(teg_ci)
+        if teg_ci < -3:
+            _add("coagulation_low", f"TEG低凝风险（CI≈{teg_ci:.1f}）")
+        elif teg_ci > 3:
+            _add("coagulation_high", f"TEG高凝风险（CI≈{teg_ci:.1f}）")
+
+    act = _row_numeric_by_keys(
+        row,
+        ["act", "act_sec", "activated_clotting_time"],
+    )
+    if act is not None:
+        evidence["act"] = float(act)
+        if act < 80 or act > 600:
+            _add("act_abnormal", f"ACT异常（≈{act:.0f} s，需结合心外循环场景判断）")
+
+    arr_label = str(anchor.get("arrhythmia_label", anchor.get("after", ""))).strip()
+    rhythm_classes = str(row.get("rhythm_classes", "")).strip() if "rhythm_classes" in row.index else ""
+    arr_text = " | ".join([x for x in [arr_label, rhythm_classes] if x]).strip()
+    if arr_text:
+        evidence["arrhythmia_text"] = arr_text
+        if _is_malignant_arrhythmia_text(arr_text):
+            _add("malignant_arrhythmia", f"恶性心律失常风险（标注：{arr_text[:120]}）")
+        elif _is_arrhythmia_event_text(arr_text):
+            _add("arrhythmia_event", f"心律异常事件（标注：{arr_text[:120]}）")
+
+    allergy_text = str(row.get("allergy", "")).strip() if "allergy" in row.index else ""
+    if allergy_text:
+        _add("allergy_history", "既往过敏史提示（需警惕术中过敏相关反应）", "allergy_text", allergy_text[:200])
+
+    recent = clinical_assessment.get("recent_state_mean", {}) if isinstance(clinical_assessment, dict) else {}
+    baseline = clinical_assessment.get("baseline_comparison", {}) if isinstance(clinical_assessment, dict) else {}
+    persist = clinical_assessment.get("persistence_seconds", {}) if isinstance(clinical_assessment, dict) else {}
+    map_now = _safe_float(recent.get("MAP_mmhg"))
+    hr_now = _safe_float(recent.get("HR_bpm"))
+    spo2_now = _safe_float(recent.get("SpO2_pct"))
+    etco2_now = _safe_float(recent.get("EtCO2_mmhg"))
+    co_now = _safe_float(recent.get("CO_L_min"))
+    ci_now = _safe_float(recent.get("CI_L_min_m2"))
+    sv_now = _safe_float(recent.get("SV_ml"))
+    ppv_now = _safe_float(recent.get("PPV_pct"))
+    svr_now = _safe_float(recent.get("SVR_dyns_cm5"))
+    map_drop_pct = _safe_float(baseline.get("MAP_drop_from_baseline_pct"))
+    map_lt_65 = _safe_float(persist.get("map_lt_65")) or 0.0
+    map_lt_55 = _safe_float(persist.get("map_lt_55")) or 0.0
+    spo2_lt_90 = _safe_float(persist.get("spo2_lt_90")) or 0.0
+    etco2_missing = _safe_float(persist.get("etco2_missing")) or 0.0
+    etco2_zero_like = _safe_float(persist.get("etco2_zero_like")) or 0.0
+    ci_low_persist = _safe_float(persist.get("ci_lt_low")) or 0.0
+    co_low_persist = _safe_float(persist.get("co_lt_low")) or 0.0
+    sv_low_persist = _safe_float(persist.get("sv_lt_low")) or 0.0
+    ppv_high_persist = _safe_float(persist.get("ppv_ge_13")) or 0.0
+    svr_low_persist = _safe_float(persist.get("svr_lt_low")) or 0.0
+    etco2_missing_alert_sec = float(ANES_THRESHOLDS["etco2_missing_alert_sec"])
+    etco2_zeroing_hint_sec = float(ANES_THRESHOLDS["etco2_zeroing_hint_sec"])
+    etco2_zeroing_suspected = (
+        etco2_missing >= etco2_missing_alert_sec and etco2_zero_like >= etco2_zeroing_hint_sec
+    )
+    if co_now is not None:
+        evidence["co_l_min"] = float(co_now)
+    if ci_now is not None:
+        evidence["ci_l_min_m2"] = float(ci_now)
+    if sv_now is not None:
+        evidence["sv_ml"] = float(sv_now)
+    if ppv_now is not None:
+        evidence["ppv_pct"] = float(ppv_now)
+    if svr_now is not None:
+        evidence["svr_dyns_cm5"] = float(svr_now)
+
+    hypotension_core = (
+        (map_now is not None and map_now < ANES_THRESHOLDS["map_hypotension_mmhg"])
+        or map_lt_65 >= ANES_THRESHOLDS["hemodynamic_window_sec"]
+        or (map_drop_pct is not None and map_drop_pct >= 30.0)
+    )
+    perfusion_markers = 0
+    if hr_now is not None and (hr_now > ANES_THRESHOLDS["hr_tachycardia_bpm"] or hr_now < ANES_THRESHOLDS["hr_bradycardia_bpm"]):
+        perfusion_markers += 1
+    if spo2_now is not None and spo2_now < ANES_THRESHOLDS["spo2_severe_low_pct"]:
+        perfusion_markers += 1
+    if spo2_lt_90 >= ANES_THRESHOLDS["critical_window_sec"]:
+        perfusion_markers += 1
+    if etco2_missing >= etco2_missing_alert_sec and not etco2_zeroing_suspected:
+        perfusion_markers += 1
+    if etco2_now is not None and etco2_now < ANES_THRESHOLDS["etco2_severe_low_mmhg"]:
+        perfusion_markers += 1
+    if ci_now is not None and ci_now < ANES_THRESHOLDS["ci_low_l_min_m2"]:
+        perfusion_markers += 1
+    if co_now is not None and co_now < ANES_THRESHOLDS["co_low_l_min"]:
+        perfusion_markers += 1
+    if sv_now is not None and sv_now < ANES_THRESHOLDS["sv_low_ml"]:
+        perfusion_markers += 1
+    if ppv_now is not None and ppv_now >= ANES_THRESHOLDS["ppv_high_pct"]:
+        perfusion_markers += 1
+    if svr_now is not None and svr_now < ANES_THRESHOLDS["svr_low_dyns_cm5"]:
+        perfusion_markers += 1
+    if ci_low_persist >= ANES_THRESHOLDS["hemodynamic_window_sec"]:
+        perfusion_markers += 1
+    if co_low_persist >= ANES_THRESHOLDS["hemodynamic_window_sec"]:
+        perfusion_markers += 1
+    if sv_low_persist >= ANES_THRESHOLDS["hemodynamic_window_sec"]:
+        perfusion_markers += 1
+    if ppv_high_persist >= ANES_THRESHOLDS["hemodynamic_window_sec"]:
+        perfusion_markers += 1
+    if svr_low_persist >= ANES_THRESHOLDS["hemodynamic_window_sec"]:
+        perfusion_markers += 1
+    if "major_bleeding" in event_types or "anuria_critical" in event_types:
+        perfusion_markers += 1
+
+    if hypotension_core and perfusion_markers >= 1:
+        _add("shock_pattern", "休克/低灌注模式预警（需立即评估失血、容量与血管活性支持）")
+
+    potential_allergy_pattern = (
+        hypotension_core
+        and (spo2_now is not None and spo2_now <= ANES_THRESHOLDS["spo2_low_pct"])
+        and (
+            (etco2_missing >= etco2_missing_alert_sec and not etco2_zeroing_suspected)
+            or (etco2_now is not None and etco2_now < ANES_THRESHOLDS["etco2_low_mmhg"])
+            or (hr_now is not None and hr_now > 110.0)
+        )
+    )
+    if potential_allergy_pattern:
+        _add(
+            "suspected_anaphylaxis_pattern",
+            "疑似过敏相关循环/呼吸模式（需结合皮疹、气道压和给药时序人工确认）",
+        )
+
+    severity = "low"
+    if any(t in ADVERSE_EVENT_CRITICAL_TYPES for t in event_types):
+        severity = "high"
+    elif event_types:
+        severity = "moderate"
+
+    return {
+        "flags": flags,
+        "event_types": event_types,
+        "risk_level": severity,
+        "evidence": evidence,
+    }
+
 
 def generate_window_plot(
     df_window: pd.DataFrame,
@@ -3345,9 +5358,249 @@ def describe_intervention(anchor: Dict[str, Any], cfg: PipelineConfig) -> str:
             return f"{label}：变化 {delta:+.3f}"
         return f"{label}：{before:.3f} -> {after:.3f}（变化 {delta:+.3f}）"
 
+    paired_volume_ml = anchor.get("paired_volume_ml")
+    paired_volume_key = str(anchor.get("paired_volume_key", "") or "")
+    paired_volume_text = ""
+    if paired_volume_ml is not None and paired_volume_key:
+        paired_label = MEDICATION_DISPLAY.get(paired_volume_key, paired_volume_key)
+        paired_volume_text = f"；对应{paired_label}约 {float(paired_volume_ml):.3f} mL"
+
     if before is None or after is None:
-        return f"{label}：速率变化 {delta:+.3f}"
-    return f"{label}：{before:.3f} -> {after:.3f}（变化 {delta:+.3f}）"
+        return f"{label}：速率变化 {delta:+.3f}{paired_volume_text}"
+    return f"{label}：{before:.3f} -> {after:.3f}（变化 {delta:+.3f}）{paired_volume_text}"
+
+
+def _collect_concurrent_medications_at_anchor(
+    df_case: pd.DataFrame,
+    anchor: Dict[str, Any],
+    max_gap_sec: float = 5.0,
+    include_inactive: bool = False,
+) -> List[Dict[str, Any]]:
+    if "Time" not in df_case.columns:
+        return []
+    t_now = _safe_float(anchor.get("time_sec"))
+    if t_now is None:
+        return []
+
+    time_series = pd.to_numeric(df_case["Time"], errors="coerce")
+    med_by_base: Dict[str, Dict[str, Any]] = {}
+    volatile_rate_keys = {"SEVO_ET_RATE", "SEVO_FI_RATE", "DES_ET_RATE", "DES_FI_RATE", "ISO_ET_RATE", "ISO_FI_RATE"}
+    anchor_med_key = str(anchor.get("medication_key", "") or "")
+    anchor_base = anchor_med_key.rsplit("_", 1)[0] if anchor_med_key.endswith(("_RATE", "_VOL")) else anchor_med_key
+
+    for med_key, cands in medication_track_candidates().items():
+        if not med_key.endswith(("_RATE", "_VOL")):
+            continue
+        col = resolve_column(df_case, cands)
+        if col is None or col not in df_case.columns:
+            continue
+        s = pd.to_numeric(df_case[col], errors="coerce")
+        sub = pd.DataFrame({"t": time_series, "v": s}).dropna()
+        if sub.empty:
+            continue
+        idx = (sub["t"] - float(t_now)).abs().idxmin()
+        row = sub.loc[idx]
+        gap = abs(float(row["t"]) - float(t_now))
+        if gap > float(max_gap_sec):
+            continue
+        value = _safe_float(row["v"])
+        if value is None:
+            continue
+
+        base = med_key.rsplit("_", 1)[0]
+        item = med_by_base.setdefault(
+            base,
+            {
+                "med_base": base,
+                "display_name": MEDICATION_DISPLAY.get(med_key, med_key),
+                "rate_key": None,
+                "rate_track": None,
+                "rate_value": None,
+                "rate_unit": None,
+                "vol_key": None,
+                "vol_track": None,
+                "volume_ml": None,
+                "is_anchor_base": bool(base == anchor_base),
+            },
+        )
+        if med_key.endswith("_RATE"):
+            item["rate_key"] = med_key
+            item["rate_track"] = col
+            item["rate_value"] = float(value)
+            if med_key in volatile_rate_keys:
+                item["rate_unit"] = "vol%"
+            elif med_key == "MAC_RATE":
+                item["rate_unit"] = "MAC"
+            else:
+                item["rate_unit"] = "mL/h"
+            item["display_name"] = MEDICATION_DISPLAY.get(med_key, item["display_name"])
+        else:
+            item["vol_key"] = med_key
+            item["vol_track"] = col
+            item["volume_ml"] = float(value)
+            if item.get("display_name", "") == med_key:
+                item["display_name"] = MEDICATION_DISPLAY.get(med_key, item["display_name"])
+
+    kept: List[Dict[str, Any]] = []
+    for _, item in med_by_base.items():
+        rate_v = _safe_float(item.get("rate_value"))
+        rate_unit = str(item.get("rate_unit") or "")
+        vol_v = _safe_float(item.get("volume_ml"))
+        active = False
+        if rate_v is not None:
+            if rate_unit in {"vol%", "MAC"}:
+                active = abs(float(rate_v)) > 1e-4
+            else:
+                active = abs(float(rate_v)) > 1e-6
+        if vol_v is not None and vol_v > 0:
+            active = True
+        if active or include_inactive:
+            item["is_active"] = bool(active)
+            kept.append(item)
+
+    def _rank(x: Dict[str, Any]) -> Tuple[int, int, float, str]:
+        is_anchor = 0 if bool(x.get("is_anchor_base")) else 1
+        has_rate = 0 if _safe_float(x.get("rate_value")) is not None else 1
+        rate_abs = abs(float(_safe_float(x.get("rate_value")) or 0.0))
+        name = str(x.get("display_name") or x.get("med_base") or "")
+        return (is_anchor, has_rate, -rate_abs, name)
+
+    kept.sort(key=_rank)
+    return kept
+
+
+def _find_vital_alert_anchors(df: pd.DataFrame, cfg: PipelineConfig) -> List[Dict[str, Any]]:
+    if "Time" not in df.columns:
+        return []
+    t = pd.to_numeric(df["Time"], errors="coerce")
+    if t.dropna().empty:
+        return []
+
+    # Build a coarse second-level grid and detect sustained critical alerts.
+    sec = t.round().astype("Int64")
+    work = pd.DataFrame({"sec": sec}).dropna()
+    work["sec"] = work["sec"].astype(int)
+    if work.empty:
+        return []
+
+    def _series_by_key(key: str) -> pd.Series:
+        col = resolve_vital_column(df, key)
+        if col is None:
+            return pd.Series(dtype=float)
+        return _physio_filter_series(pd.to_numeric(df[col], errors="coerce"), key=key)
+
+    spo2 = _series_by_key("SPO2")
+    etco2 = _series_by_key("ETCO2")
+    mbp = _series_by_key("MBP")
+    hr = _series_by_key("HR")
+
+    frame = pd.DataFrame({"sec": sec, "SPO2": spo2, "ETCO2": etco2, "MBP": mbp, "HR": hr}).dropna(subset=["sec"])
+    frame["sec"] = frame["sec"].astype(int)
+    sec_df = frame.groupby("sec", as_index=False).median(numeric_only=True)
+    if sec_df.empty:
+        return []
+
+    def _collect_runs(mask: pd.Series, min_len: int) -> List[Tuple[int, int]]:
+        runs: List[Tuple[int, int]] = []
+        start = None
+        prev = None
+        for i, v in enumerate(mask.tolist()):
+            cur_sec = int(sec_df.iloc[i]["sec"])
+            if bool(v):
+                if start is None:
+                    start = cur_sec
+                prev = cur_sec
+            else:
+                if start is not None and prev is not None and (prev - start + 1) >= min_len:
+                    runs.append((start, prev))
+                start = None
+                prev = None
+        if start is not None and prev is not None and (prev - start + 1) >= min_len:
+            runs.append((start, prev))
+        return runs
+
+    anchors: List[Dict[str, Any]] = []
+    rules = [
+        ("hypoxemia", (sec_df["SPO2"] < 90.0), 20),
+        ("etco2_signal_loss_or_severe_low", (sec_df["ETCO2"].isna() | (sec_df["ETCO2"] < 25.0)), 12),
+        ("map_low_perfusion", (sec_df["MBP"] < 65.0), 30),
+        ("hr_extreme", ((sec_df["HR"] > 130.0) | (sec_df["HR"] < 45.0)), 20),
+    ]
+    for label, mask, min_len in rules:
+        runs = _collect_runs(mask.fillna(False), min_len=min_len)
+        for s0, s1 in runs:
+            t_anchor = float((s0 + s1) / 2.0)
+            anchors.append(
+                {
+                    "time_sec": t_anchor,
+                    "medication_key": "UNLABELED_EVENT",
+                    "track": f"ALERT/{label}",
+                    "delta": 0.0,
+                    "before": None,
+                    "after": None,
+                    "prev_time_sec": None,
+                    "dt_sec": None,
+                    "inferred_rate_ml_per_h": None,
+                    "smoothed_rate_ml_per_h": None,
+                    "smoothed_dt_sec": None,
+                    "smoothed_ref_time_sec": None,
+                    "smoothed_ref_volume_ml": None,
+                    "smoothed_current_volume_ml": None,
+                    "smoothed_delta_volume_ml": None,
+                    "anchor_source": "physio",
+                    "alert_type": label,
+                    "alert_start_sec": float(s0),
+                    "alert_end_sec": float(s1),
+                }
+            )
+    anchors.sort(key=lambda x: float(x.get("time_sec", 0.0)))
+    return anchors
+
+
+def _build_joint_anchors(
+    med_anchors: List[Dict[str, Any]],
+    vital_anchors: List[Dict[str, Any]],
+    max_gap_sec: float,
+    require_med_link: bool = True,
+) -> List[Dict[str, Any]]:
+    if not vital_anchors:
+        return med_anchors
+    out: List[Dict[str, Any]] = []
+    med_sorted = sorted(med_anchors, key=lambda x: float(x.get("time_sec", 0.0)))
+    for va in vital_anchors:
+        vt = float(va.get("time_sec", 0.0))
+        near = None
+        near_gap = None
+        for ma in med_sorted:
+            g = abs(float(ma.get("time_sec", 0.0)) - vt)
+            if g <= max_gap_sec and (near_gap is None or g < near_gap):
+                near = ma
+                near_gap = g
+        if near is not None:
+            merged = dict(near)
+            merged["anchor_source"] = "joint"
+            merged["vital_alert_type"] = va.get("alert_type")
+            merged["vital_alert_start_sec"] = va.get("alert_start_sec")
+            merged["vital_alert_end_sec"] = va.get("alert_end_sec")
+            merged["joint_unknown_without_med"] = False
+            out.append(merged)
+        else:
+            if require_med_link:
+                continue
+            unk = dict(va)
+            unk["anchor_source"] = "joint"
+            unk["joint_unknown_without_med"] = True
+            out.append(unk)
+    out.sort(key=lambda x: float(x.get("time_sec", 0.0)))
+    deduped: List[Dict[str, Any]] = []
+    last_t = None
+    for event in out:
+        t = float(event.get("time_sec", 0.0))
+        if last_t is None or abs(t - last_t) >= max_gap_sec:
+            deduped.append(event)
+            last_t = t
+    return deduped
+
 
 def build_snapshot(
     row: pd.Series,
@@ -3380,6 +5633,12 @@ def build_snapshot(
     approach = first_valid(row, ["approach"], "Unknown")
     position = first_valid(row, ["position"], "Unknown")
     ane_type = first_valid(row, ["ane_type"], "Unknown")
+    concurrent_medications_all = _collect_concurrent_medications_at_anchor(
+        df_case=df_case,
+        anchor=anchor,
+        include_inactive=True,
+    )
+    concurrent_medications_active = [x for x in concurrent_medications_all if bool(x.get("is_active", False))]
 
     clinical_source_meta = _collect_row_fields(
         row,
@@ -3435,11 +5694,40 @@ def build_snapshot(
         df_window=df_window,
         anchor_time_sec=float(anchor["time_sec"]),
     )
+    vitaldb_track_map = _build_vitaldb_track_map(df_window=df_window, row=row)
     clinical_assessment = build_clinical_assessment(
         df_window=df_window,
         anchor=anchor,
         baseline_comparison=baseline_comparison,
     )
+    patient_weight_kg = _safe_float(weight)
+    ane_dur_min = _safe_float(first_valid(row, ["ane_dur", "anesthesia_duration_min"], None))
+    adverse_event_bundle = _extract_adverse_events(
+        row=row,
+        anchor=anchor,
+        clinical_assessment=clinical_assessment,
+        patient_weight_kg=patient_weight_kg,
+        ane_dur_min=ane_dur_min,
+    )
+    adverse_event_flags = adverse_event_bundle.get("flags", []) if isinstance(adverse_event_bundle, dict) else []
+    adverse_event_types = adverse_event_bundle.get("event_types", []) if isinstance(adverse_event_bundle, dict) else []
+    if adverse_event_flags:
+        merged_flags = list(clinical_assessment.get("risk_flags", [])) if isinstance(clinical_assessment.get("risk_flags"), list) else []
+        merged_flags.extend(adverse_event_flags)
+        clinical_assessment["risk_flags"] = list(dict.fromkeys(merged_flags))
+        clinical_assessment["adverse_event_flags"] = adverse_event_flags
+        clinical_assessment["adverse_event_types"] = adverse_event_types
+        clinical_assessment["adverse_event_evidence"] = adverse_event_bundle.get("evidence", {})
+        if any(t in ADVERSE_EVENT_CRITICAL_TYPES for t in adverse_event_types):
+            clinical_assessment["risk_level"] = "high"
+            clinical_assessment["sample_category"] = "critical_alarm"
+        elif any(t in ADVERSE_EVENT_WARNING_TYPES for t in adverse_event_types) and str(clinical_assessment.get("risk_level", "")).lower() == "low":
+            clinical_assessment["risk_level"] = "moderate"
+            clinical_assessment["sample_category"] = "warning_signal"
+    else:
+        clinical_assessment["adverse_event_flags"] = []
+        clinical_assessment["adverse_event_types"] = []
+        clinical_assessment["adverse_event_evidence"] = {}
     intervention_type = infer_intervention_type(anchor, cfg)
     tmp_snapshot_for_eval = {
         "clinical_assessment": clinical_assessment,
@@ -3469,10 +5757,15 @@ def build_snapshot(
         f"vital_trend_last_{int(window_sec / 60)}min": trends,
         "vital_stats": stat_block,
         "baseline_comparison": baseline_comparison,
+        "vitaldb_track_map": vitaldb_track_map,
+        "vitaldb_indicator_source_hints": VITALDB_INDICATOR_SOURCE_HINTS,
         "clinical_assessment": clinical_assessment,
+        "sample_category": clinical_assessment.get("sample_category", "stable_maintenance"),
         "miller_alignment": miller_alignment,
         "actual_intervention": actual_intervention_text,
         "interpreted_intervention_type": intervention_type,
+        "concurrent_medications": concurrent_medications_all,
+        "concurrent_medications_active": concurrent_medications_active,
         "anchor_detail": {
             "anchor_source": anchor.get("anchor_source", "medication"),
             "track": anchor["track"],
@@ -3490,6 +5783,16 @@ def build_snapshot(
             "smoothed_ref_volume_ml": anchor.get("smoothed_ref_volume_ml"),
             "smoothed_current_volume_ml": anchor.get("smoothed_current_volume_ml"),
             "smoothed_delta_volume_ml": anchor.get("smoothed_delta_volume_ml"),
+            "sustained_pre_median": anchor.get("sustained_pre_median"),
+            "sustained_post_median": anchor.get("sustained_post_median"),
+            "sustained_delta": anchor.get("sustained_delta"),
+            "paired_volume_key": anchor.get("paired_volume_key"),
+            "paired_volume_track": anchor.get("paired_volume_track"),
+            "paired_volume_ml": anchor.get("paired_volume_ml"),
+            "vital_alert_type": anchor.get("vital_alert_type", anchor.get("alert_type")),
+            "vital_alert_start_sec": anchor.get("vital_alert_start_sec", anchor.get("alert_start_sec")),
+            "vital_alert_end_sec": anchor.get("vital_alert_end_sec", anchor.get("alert_end_sec")),
+            "joint_unknown_without_med": anchor.get("joint_unknown_without_med"),
             "intervention_type": intervention_type,
             "before": anchor.get("before"),
             "after": anchor.get("after"),
@@ -3535,6 +5838,15 @@ def stage2_extract_snapshots(cases_df: pd.DataFrame, cfg: PipelineConfig) -> Lis
             anchors = find_arrdb_anchors(caseid=caseid, df_case=df_case, cfg=cfg)
         elif cfg.anchor_mode == "periodic":
             anchors = find_periodic_anchors(df_case=df_case, cfg=cfg)
+        elif cfg.anchor_mode == "joint":
+            med_anchors = find_anchors(df_case, cfg)
+            vital_anchors = _find_vital_alert_anchors(df_case, cfg)
+            anchors = _build_joint_anchors(
+                med_anchors,
+                vital_anchors,
+                max_gap_sec=float(cfg.joint_link_max_gap_sec),
+                require_med_link=bool(cfg.joint_require_med_link),
+            )
         elif cfg.anchor_mode == "hybrid":
             anchors = find_anchors(df_case, cfg) + find_arrdb_anchors(caseid=caseid, df_case=df_case, cfg=cfg)
             anchors = sorted(anchors, key=lambda x: float(x.get("time_sec", 0.0)))
@@ -3647,7 +5959,7 @@ def _format_miller_evidence(retrieval: Optional[Dict[str, Any]]) -> str:
         f"Miller retrieval raw query:\n{query_raw}\n",
         f"Miller retrieval rewritten query:\n{query_rewritten}\n",
         f"Miller retrieval intent tags:\n{intent_text}\n",
-        "Evidence locator format to cite in output: [M10 | 术中相关章节: ... | p.1493]",
+        "Evidence locator format to cite in output: [M10#rank | 术中相关章节: ... | p.1493]",
         "Retrieved evidence excerpts from Miller's Anesthesia, 10th edition (hybrid top-k):",
     ]
     for item in retrieval["results"]:
@@ -3673,15 +5985,31 @@ def _build_q_signal_context(snapshot: Dict[str, Any]) -> Dict[str, Any]:
             trend_text_block = value
             break
 
-    signal_order = ["MBP", "HR", "SPO2", "BIS"]
-    rename = {"MBP": "MAP", "SPO2": "SpO2"}
+    signal_order = [
+        "MBP",
+        "SBP",
+        "DBP",
+        "HR",
+        "SPO2",
+        "ETCO2",
+        "CO",
+        "CI",
+        "SV",
+        "SVV",
+        "PPV",
+        "CVP",
+        "SVR",
+        "BT",
+        "RSO2_L",
+        "RSO2_R",
+        "BIS",
+    ]
+    rename = {"MBP": "MAP", "SPO2": "SpO2", "RSO2_L": "rSO2_L", "RSO2_R": "rSO2_R"}
     signals: Dict[str, Any] = {}
     for vital_key in signal_order:
         out_key = rename.get(vital_key, vital_key)
         summary = vital_stats.get(vital_key) if isinstance(vital_stats.get(vital_key), dict) else None
         if summary is None:
-            text = str(trend_text_block.get(vital_key, "insufficient valid data"))
-            signals[out_key] = {"trend_text": text}
             continue
 
         unit = VITAL_UNIT.get(vital_key, "")
@@ -3698,6 +6026,7 @@ def _build_q_signal_context(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "trend_window": trend_key or "last_window",
         "signals": signals,
+        "available_signals": list(signals.keys()),
     }
 
 
@@ -3735,7 +6064,22 @@ def _build_decision_support_context(snapshot: Dict[str, Any]) -> Dict[str, Any]:
         "anchor_detail",
         "unit_corrections",
     ]
-    return {key: snapshot.get(key) for key in keep_keys if key in snapshot}
+    out = {key: snapshot.get(key) for key in keep_keys if key in snapshot}
+    clinical = out.get("clinical_assessment")
+    if isinstance(clinical, dict):
+        cleaned = dict(clinical)
+        for list_key in ("risk_flags", "contextual_interpretation"):
+            value = cleaned.get(list_key)
+            if isinstance(value, list):
+                cleaned[list_key] = [
+                    x for x in value if not _mentions_missing_indicator(str(x))
+                ]
+        cleaned["missing_data_guidance"] = (
+            "Use only available objective physiologic signals and trends. "
+            "Do not mention unavailable indicators in final Q/A."
+        )
+        out["clinical_assessment"] = cleaned
+    return out
 
 
 def _expected_action_unit(snapshot: Dict[str, Any]) -> str:
@@ -3764,6 +6108,105 @@ def _expected_action_unit(snapshot: Dict[str, Any]) -> str:
     return ""
 
 
+def _normalize_numeric_text(text: str) -> str:
+    if not text:
+        return ""
+    return (
+        str(text)
+        .replace("μ", "u")
+        .replace("µ", "u")
+        .replace("／", "/")
+        .replace("–", "-")
+        .replace("—", "-")
+        .replace("～", "~")
+    )
+
+
+def _unit_regex(unit: str) -> str:
+    if unit == "mL/h":
+        return r"ml\s*/\s*h"
+    if unit == "mL":
+        return r"ml(?!\s*/\s*h)"
+    if unit == "vol%":
+        return r"(?:vol\s*%|%\s*vol)"
+    if unit == "MAC":
+        return r"mac\b"
+    return re.escape(unit.lower())
+
+
+def _extract_unit_value(text: str, unit: str) -> Optional[Dict[str, float]]:
+    if not text or not unit:
+        return None
+    t = _normalize_numeric_text(text).lower()
+    u = _unit_regex(unit)
+    range_re = rf"(\d+(?:\.\d+)?)\s*(?:-|~|to|至)\s*(\d+(?:\.\d+)?)\s*{u}"
+    m_range = re.search(range_re, t, flags=re.IGNORECASE)
+    if m_range:
+        a = float(m_range.group(1))
+        b = float(m_range.group(2))
+        lo = min(a, b)
+        hi = max(a, b)
+        return {"value": (lo + hi) / 2.0, "lo": lo, "hi": hi}
+    single_re = rf"(\d+(?:\.\d+)?)\s*{u}"
+    m_single = re.search(single_re, t, flags=re.IGNORECASE)
+    if m_single:
+        v = float(m_single.group(1))
+        return {"value": v, "lo": v, "hi": v}
+    return None
+
+
+def _is_value_pair_close(v1: float, v2: float, unit: str) -> bool:
+    if v1 <= 0 or v2 <= 0:
+        return False
+    ratio = max(v1, v2) / max(min(v1, v2), 1e-9)
+    diff = abs(v1 - v2)
+    if unit == "mL/h":
+        return (diff <= 5.0) or (ratio <= 1.6)
+    if unit == "mL":
+        return (diff <= 1.0) or (ratio <= 2.0)
+    if unit == "vol%":
+        return (diff <= 1.0) or (ratio <= 1.5)
+    if unit == "MAC":
+        return (diff <= 0.3) or (ratio <= 1.5)
+    return ratio <= 1.8
+
+
+def _matches_target_value(extracted: Dict[str, float], target: float, unit: str) -> bool:
+    if target <= 0:
+        return True
+    lo = extracted.get("lo")
+    hi = extracted.get("hi")
+    if lo is not None and hi is not None and lo <= target <= hi:
+        return True
+    return _is_value_pair_close(float(extracted.get("value", 0.0)), target, unit)
+
+
+def _expected_action_value(snapshot: Dict[str, Any]) -> Optional[float]:
+    unit = _expected_action_unit(snapshot)
+    if not unit:
+        return None
+    anchor = snapshot.get("anchor_detail", {}) if isinstance(snapshot.get("anchor_detail"), dict) else {}
+    if unit == "mL/h":
+        for key in ("smoothed_rate_ml_per_h", "inferred_rate_ml_per_h"):
+            v = _safe_float(anchor.get(key))
+            if v is not None and v > 0:
+                return float(v)
+    elif unit == "mL":
+        for key in ("smoothed_delta_volume_ml", "delta"):
+            v = _safe_float(anchor.get(key))
+            if v is not None:
+                return abs(float(v))
+    elif unit in {"vol%", "MAC"}:
+        v = _safe_float(anchor.get("after"))
+        if v is not None:
+            return float(v)
+    actual = str(snapshot.get("actual_intervention", ""))
+    parsed = _extract_unit_value(actual, unit)
+    if parsed:
+        return float(parsed["value"])
+    return None
+
+
 def _extract_question_line(text: str) -> str:
     out = _extract_qa_block(text)
     lines = [line.strip() for line in out.splitlines() if line.strip()]
@@ -3786,6 +6229,15 @@ def _has_subjective_hints_in_q(text: str) -> bool:
     return False
 
 
+def _mentions_missing_indicator(text: str) -> bool:
+    if not text:
+        return False
+    for pattern in MISSING_INDICATOR_PATTERNS:
+        if re.search(pattern, text):
+            return True
+    return False
+
+
 def _q_has_intervention_question(text: str) -> bool:
     q_line = _extract_question_line(text)
     if not q_line:
@@ -3796,58 +6248,75 @@ def _q_has_intervention_question(text: str) -> bool:
 
 
 def build_user_prompt(snapshot: Dict[str, Any], retrieval: Optional[Dict[str, Any]] = None) -> str:
-    snapshot_json = json.dumps(snapshot, ensure_ascii=False, indent=2)
+    q_visible_text = json.dumps(_build_q_visible_context(snapshot), ensure_ascii=False, indent=2)
+    support_text = json.dumps(_build_decision_support_context(snapshot), ensure_ascii=False, indent=2)
     fewshot = _fewshot_text_for_snapshot(snapshot)
     golden = _golden_action_hint(snapshot)
     med_key = golden["medication_key"]
     actual = golden["actual_intervention"]
     kws = golden["keywords"]
     kw_text = ", ".join(kws) if kws else "N/A"
-    expected_unit = _expected_action_unit(snapshot)
-    target_value = _expected_action_numeric(snapshot)
-    target_hint = ""
-    if expected_unit and target_value is not None:
-        target_hint = f"- target logged_action numeric reference: {target_value:.2f} {expected_unit}\n"
+    decision_unit = _expected_action_unit(snapshot)
+    decision_unit_text = decision_unit if decision_unit else "N/A (non-dose sample)"
     q_focus = _question_focus_instruction(snapshot)
     evidence_block = _format_miller_evidence(retrieval)
+    has_evidence = bool(retrieval and isinstance(retrieval.get("results"), list) and retrieval.get("results"))
+    evidence_rule = (
+        "- 【决策干预（Miller）】必须严格遵循“诊断依据：...; 具体干预：...; 原文摘录：...”的模板结构。\n"
+        "- 诊断依据：必须基于当前患者客观生理信息（至少包含MAP/HR/SpO2/BIS中的可用项及其趋势），不得使用空泛主观结论。\n"
+        "- 具体干预：必须输出根据Miller推测出的、最符合患者当前情况的具体干预行动（必须包含具体用药和用药剂量）。\n"
+        "- 原文摘录：必须直接来自检索证据原文（尽量保留英文原句关键短语），不要只写概述，并在结尾附证据定位标签，如 [M10#1 | 术中相关章节: ... | p.1493]。\n"
+        "- 【决策干预（Miller）】不能只贴引文，必须把证据映射到当前患者生理状态并给出可执行决策。\n"
+        "- 若某生理指标缺失，Q/A中不要提及该指标“缺失/暂无/不可用”，仅基于其余可用指标给出判断与干预。\n"
+        if has_evidence
+        else "- 若无检索证据，仍保持“诊断依据+具体干预+原文摘录”三段结构；在原文摘录末尾标注“证据定位不足”，并基于当前生理信号给出保守可执行策略。若某生理指标缺失，不要在Q/A中提及其缺失。\n"
+    )
     return (
-        "User Prompt：Below is a real OR monitoring snapshot in structured JSON:\n"
-        f"{snapshot_json}\n\n"
-        f"{fewshot}\n\n"
+        "Q-visible context (the ONLY allowed source for the Q line):\n"
+        f"{q_visible_text}\n\n"
+        "Decision-support context (for A and intervention lines only; do NOT leak into Q wording):\n"
+        f"{support_text}\n\n"
+        f"{fewshot}\n"
         f"{evidence_block}"
         "Supervision policy for this dataset:\n"
         f"- logged_action (golden): {actual}\n"
         f"- medication_key: {med_key}\n"
         f"- expected drug keywords: {kw_text}\n"
-        f"{target_hint}"
-        "You MUST align 【决策干预（VitalDB）】 with logged_action (same drug class/category). Do not output a contradictory drug.\n"
-        "【决策干预（VitalDB）】必须对照logged_action生成：药物/方向/核心数值/单位需与logged_action一致；不得无依据改动数值。\n"
-        "若logged_action未提供复评时间、复评指标或下一步条件，【决策干预（VitalDB）】不得自行补写这些内容。\n"
-        "【决策干预（VitalDB）】最终文本禁止出现“logged_action/actual_intervention/golden/与记录一致/对照记录”等解释性元话术，只保留可执行临床指令。\n"
+        f"- required actionable dose/rate unit for both Miller and VitalDB lines: {decision_unit_text}\n"
+        "You MUST align 【决策干预（VitalDB）】 with logged_action (same drug class/category), and provide a concrete executable order "
+        "(drug + direction + dose/rate magnitude or target + reassessment time + escalation/stop condition). "
+        "Do not output a contradictory drug.\n"
         f"{q_focus}\n"
+        "Q-line constraints:\n"
+        "- Q must only contain patient background + available intraoperative physiologic current values and trends.\n"
+        "- Q should end with wording equivalent to: “结合手术背景，此时最合理的干预措施是什么？”.\n"
+        "- NEVER include any clinical inference/interpretation words in Q (e.g., 提示/显示/稳定/不稳定/不足/过深/过浅).\n"
+        "- If a physiologic indicator is unavailable, OMIT it from Q entirely; do not mention missing/unavailable/暂无/无效.\n"
+        "- Q must NOT include guideline citation, retrieval locator, logged_action, or anchor metadata.\n"
+        "Unit normalization policy:\n"
+        "- Use MAP mmHg, HR bpm, SpO2 %, BIS index; infusion in mL/h; bolus in mL; volatile concentration in vol%.\n"
+        "- Do not mix pressure units (e.g., do not use kPa once converted to mmHg).\n"
+        "- In this sample, both 【决策干预（Miller）】 and 【决策干预（VitalDB）】 executable dose/rate must use the same actionable unit target.\n"
+        "- If Miller source uses a different unit (e.g., μg/kg/min), convert or annotate to the VitalDB-comparable unit when possible.\n"
+        "- If precise conversion is impossible due to missing body weight/drug concentration, keep original units and briefly state why conversion is not possible; never fabricate numbers.\n"
         "Clinical priority policy:\n"
         "- MAP absolute threshold is the perfusion floor; relative MAP drop is layered risk stratification.\n"
+        "- SpO2 is a high-sensitivity oxygenation signal: sustained decline toward 95% deserves early attention, and <90% is critical.\n"
+        "- EtCO2 is a high-sensitivity airway/ventilation signal: persistent disappearance (outside zeroing) or severe deviation requires immediate troubleshooting.\n"
         "- BIS must be interpreted with MAP/HR/SpO2 and surgical stimulation; do not use BIS as a standalone trigger.\n"
         "- 【决策干预（Miller）】 MUST be grounded primarily in the retrieved excerpts from Miller's Anesthesia, 10th edition, when such excerpts are provided.\n"
         "- Do not present generic anesthesia knowledge as if it were a Miller 10th edition recommendation unless it is supported by the retrieved excerpts.\n"
         "- If retrieved Miller evidence is incomplete or ambiguous, explicitly stay conservative and fall back to objective physiologic signals in the snapshot.\n"
-        "- 【决策干预（Miller）】必须严格遵循 诊断依据：...; 具体干预：...; 原文摘录:... 的模板结构。\n"
-        "    - 诊断依据: 必须基于当前患者客观生理信息（至少包含MAP/HR/SpO2/BIS中的可用项及其近期趋势），不得空泛。\n"
-        "    - 具体干预: 必须输出根据Miller推测出的、最符合患者当前情况的具体干预行动（必须包含具体的用药和用药剂量）。若执行单位为mL/h，优先给出目标泵速范围（如31.6-35 mL/h），增量（如+0.1-0.2 mL/h）只能作补充。\n"
-        "    - 具体干预中的复评闭环: 必须写明复评时间 + 复评指标（至少2项，如BIS/MAP/HR）+ 复评后下一步条件（如“若...则...”）。\n"
-        "    - 原文摘录: 必须直接来自检索证据原文（尽量保留英文原句关键短语），不要只写概述，并在结尾处附上证据定位标签，格式如 [M10 | 术中相关章节: ... | p.1493]。\n"
-        "- 【决策干预（Miller）】与【决策干预（VitalDB）】中的用药剂量单位必须统一（例如：若Miller给出 μg/kg/min，请在具体干预中将其换算或备注为与 VitalDB 相同的 mg/kg/h 或 mL/h 格式，以确保两者可直接对比）。警告：若因snapshot缺失患者体重或药物浓度数据导致无法精确换算，请保留各自原始单位并简要注明无法换算的原因，严禁凭空捏造数据进行数学计算。\n\n"
+        f"{evidence_rule}"
         "You MUST output EXACTLY ONE QA pair in Chinese with this strict format:\n\n"
-        "Q: 描述病人背景、术中阶段、体征趋势的流畅段落, 最后提问“结合手术背景，此时最合理的干预措施是什么？”。严禁在问题中包含任何临床推断、病理状态评价（如“显示麻醉深度不足”、“循环稳定”等）或暗示性词汇\n"
-        "A: 【临床推理】：精炼总结核心病理生理机制\n"
-        "【决策干预（Miller）】：诊断依据：<基于当前客观体征与趋势>; 具体干预：<基于第十版米勒麻醉学检索证据的建议，包含具体用药和用药剂量 + 复评时间 + 复评指标 + 若...则...的后续条件>; 原文摘录：<尽量保留英文原句关键短语，给出证据定位[M10 | 术中相关章节: ... | p.1493]>\n"
-        "【决策干预（VitalDB）】：<给出药物+方向+核心数值+单位的实际策略；无复评信息时不补写复评>\n\n"
+        "Q: <描述病人背景、术中阶段、体征趋势的流畅段落, 最后提问“结合手术背景，此时最合理的干预措施是什么？”（可同义改写）；严禁任何临床推断/病理评价/暗示性词汇>\n"
+        "A: 【临床推理】：<精炼总结核心病理生理机制>\n"
+        "【决策干预（Miller）】：诊断依据：<结合当前值+趋势>; 具体干预：<基于第十版米勒检索证据的具体用药与剂量>; 原文摘录：<尽量保留英文原句关键短语并附定位 [M10#1 | 术中相关章节: ... | p.1493]>\n"
+        "【决策干预（VitalDB）】：<与logged_action一致的实际策略，不得与golden冲突>\n\n"
         "The final QA block MUST be exactly these 4 lines (one line per label), no extra lines before or after.\n"
         "Use labels exactly as: Q:, A:, 【临床推理】, 【决策干预（Miller）】, 【决策干预（VitalDB）】.\n"
         "Do not change brackets, punctuation, or label names.\n"
-        "In final QA text, do NOT mention logged_action/actual_intervention/golden or any meta alignment explanation.\n"
-        "If BIS data is missing, evaluate anesthesia depth indirectly using autonomic signs "
-        "(HR, MBP trends) and surgical stimulation context.\n"
+        "If any physiologic indicator is unavailable, infer decisions from available objective signals only and do not mention missing indicators in the final Q/A text.\n"
         "Use 'clinical_assessment.risk_flags', 'contextual_interpretation', "
         "'baseline_comparison', and 'drug_reference' to improve realism.\n"
         "Do not output any text outside the final QA pair.\n"
@@ -3861,40 +6330,6 @@ def _clean_raw_output(text: str) -> str:
     out = out.replace("\r\n", "\n").strip()
     return out
 
-
-def _strip_vitaldb_meta_phrases(text: str) -> str:
-    if not text:
-        return text
-    out = text
-    idx = out.rfind("VitalDB")
-    if idx < 0:
-        return text
-    colon_pos = out.find("：", idx)
-    if colon_pos < 0:
-        colon_pos = out.find(":", idx)
-    if colon_pos < 0:
-        return text
-
-    prefix = out[: colon_pos + 1]
-    body = out[colon_pos + 1 :].strip()
-    body = re.sub(
-        r"[（(][^）)]*(?:logged_action|actual_intervention|golden|记录|对照)[^）)]*[）)]",
-        "",
-        body,
-        flags=re.IGNORECASE,
-    )
-    body = re.sub(r"按\s*logged_action\s*同类", "", body, flags=re.IGNORECASE)
-    body = re.sub(r"按\s*actual_intervention\s*同类", "", body, flags=re.IGNORECASE)
-    body = re.sub(r"严格\s*对照[^，,。；;]*", "", body, flags=re.IGNORECASE)
-    body = re.sub(r"(与|和)?(?:原始)?记录(?:动作|方向|剂量|数值|单位)?一致", "", body, flags=re.IGNORECASE)
-    body = re.sub(r"\b(?:logged_action|actual_intervention|golden)\b", "", body, flags=re.IGNORECASE)
-    body = re.sub(r"(并|且)\s*$", "", body)
-    body = re.sub(r"\s{2,}", " ", body).strip(" ，,；;。")
-    if not body:
-        body = "维持当前给药策略。"
-    return f"{prefix}{body}"
-
-
 def _extract_qa_block(text: str) -> str:
     out = _clean_raw_output(text)
     # Remove any CoT enclosed in think tags before extracting QA.
@@ -3906,17 +6341,14 @@ def _extract_qa_block(text: str) -> str:
     if q_matches:
         out = out[q_matches[-1].start() :].strip()
     # Strictly extract final Q/A block.
-    # NOTE:
-    # Do not use bare "<" as a stop token, because clinical thresholds like
-    # "<65 mmHg" are common and would cause accidental truncation.
     match = re.search(
-        r"(Q\s*[:：].*?A\s*[:：].*?【决策干预.*?)(?=\n\n|\n\*|\n<(?=[a-zA-Z!/])|```|$)",
+        r"(Q\s*[:：].*?A\s*[:：].*?【决策干预.*?(?=\n\n|\n\*|\n<|<|```|$))",
         out,
         re.IGNORECASE | re.DOTALL,
     )
     if match:
-        return _strip_vitaldb_meta_phrases(match.group(1).strip())
-    return _strip_vitaldb_meta_phrases(out.strip())
+        return match.group(1).strip()
+    return out.strip()
 
 def _is_strict_qa(text: str) -> bool:
     out = _extract_qa_block(text)
@@ -3951,6 +6383,8 @@ def _is_strict_qa(text: str) -> bool:
         return False
     if _has_subjective_hints_in_q(out):
         return False
+    if _mentions_missing_indicator(out):
+        return False
     if not _q_has_intervention_question(out):
         return False
     miller_line = lines[2]
@@ -3959,7 +6393,7 @@ def _is_strict_qa(text: str) -> bool:
     has_quote = bool(re.search(r"原文摘录\s*[:：=]", miller_line))
     if not (has_diag and has_action and has_quote):
         return False
-    has_m10 = bool(re.search(r"(?i)m10(?:\s*#\d+)?", miller_line))
+    has_m10 = bool(re.search(r"(?i)m10\s*#\d+", miller_line))
     has_page = bool(re.search(r"(?i)\bp\.\s*\d+\b", miller_line)) or ("页" in miller_line)
     has_paragraph = bool(re.search(r"段落\s*[:：]?\s*\d+", miller_line)) or bool(
         re.search(r"(?i)\bpara(?:graph)?\s*[:：#]?\s*\d+\b", miller_line)
@@ -4009,7 +6443,7 @@ def _extract_miller_evidence_fields(text: str) -> Dict[str, str]:
     if m_chapter:
         chapter_para = m_chapter.group(1).strip()
     else:
-        m_locator = re.search(r"(\[M10(?:\s*#\d+)?[^\]]*\])", dec, re.IGNORECASE)
+        m_locator = re.search(r"(\[M10\s*#\d+.*?\])", dec, re.IGNORECASE)
         if m_locator:
             chapter_para = m_locator.group(1).strip()
 
@@ -4051,149 +6485,23 @@ def _has_unit_unconvertible_reason(text: str) -> bool:
     return any(h in text for h in hints)
 
 
-def _extract_miller_action_clause(decision_text: str) -> str:
-    if not decision_text:
-        return ""
-    m = re.search(
-        r"具体干预\s*[:：=]\s*(.*?)(?:(?:;|；)\s*原文摘录\s*[:：=]|$)",
-        decision_text,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    if m:
-        return m.group(1).strip()
-    return decision_text.strip()
-
-
-def _has_explicit_dose_or_rate(action_text: str) -> bool:
-    if not action_text:
-        return False
-    return bool(
-        re.search(
-            r"\d+(?:\.\d+)?\s*(?:mL/h|mL|mg/kg/h|mg/kg/min|μg/kg/min|µg/kg/min|ug/kg/min|mcg/kg/min|mg|μg|µg|ug|mcg|vol%|MAC)",
-            action_text,
-            flags=re.IGNORECASE,
-        )
-    )
-
-
-def _has_explicit_drug_name(action_text: str, snapshot: Dict[str, Any]) -> bool:
-    if not action_text:
-        return False
-    low = action_text.lower()
-    hint = _golden_action_hint(snapshot)
-    kws = [str(k).strip().lower() for k in hint.get("keywords", []) if str(k).strip()]
-    if kws and any(k in low for k in kws):
-        return True
-    return bool(
-        re.search(
-            r"(丙泊酚|瑞芬太尼|去氧肾上腺素|去甲肾上腺素|麻黄碱|肾上腺素|硝酸甘油|米力农|阿托品|七氟烷|地氟烷|异氟烷|"
-            r"propofol|remifentanil|phenylephrine|norepinephrine|ephedrine|epinephrine|nitroglycerin|milrinone|atropine|sevoflurane|desflurane|isoflurane)",
-            action_text,
-            flags=re.IGNORECASE,
-        )
-    )
-
-
-def _extract_values_with_unit(text: str, unit: str) -> List[float]:
-    if not text or not unit:
-        return []
-    src = str(text).replace("μ", "u").replace("µ", "u")
-    if unit == "mL/h":
-        pat = r"(\d+(?:\.\d+)?)\s*m[lL]\s*/\s*h"
-    elif unit == "mL":
-        pat = r"(\d+(?:\.\d+)?)\s*m[lL](?!\s*/\s*h)"
-    elif unit == "vol%":
-        pat = r"(\d+(?:\.\d+)?)\s*(?:vol\s*%|%)"
-    elif unit == "MAC":
-        pat = r"(\d+(?:\.\d+)?)\s*MAC\b"
-    else:
-        pat = rf"(\d+(?:\.\d+)?)\s*{re.escape(unit)}"
-    vals: List[float] = []
-    for m in re.finditer(pat, src, flags=re.IGNORECASE):
-        try:
-            vals.append(float(m.group(1)))
-        except Exception:
-            continue
-    return vals
-
-
-def _expected_action_numeric(snapshot: Dict[str, Any]) -> Optional[float]:
-    unit = _expected_action_unit(snapshot)
-    if not unit:
-        return None
-    anchor = snapshot.get("anchor_detail", {}) if isinstance(snapshot.get("anchor_detail"), dict) else {}
-    if unit == "mL/h":
-        for key in ("smoothed_rate_ml_per_h", "inferred_rate_ml_per_h"):
-            v = _safe_float(anchor.get(key))
-            if v is not None and v > 0:
-                return float(v)
-    elif unit == "mL":
-        for key in ("smoothed_delta_volume_ml", "delta"):
-            v = _safe_float(anchor.get(key))
-            if v is not None:
-                return abs(float(v))
-    elif unit in {"vol%", "MAC"}:
-        v = _safe_float(anchor.get("after"))
-        if v is not None:
-            return float(v)
-
-    actual = str(snapshot.get("actual_intervention", ""))
-    vals = _extract_values_with_unit(actual, unit)
-    if vals:
-        return float(vals[0])
-    return None
-
-
-def _is_vitaldb_close_to_logged_action(text: str, snapshot: Dict[str, Any]) -> bool:
-    unit = _expected_action_unit(snapshot)
-    target = _expected_action_numeric(snapshot)
-    if not unit or target is None or target <= 0:
-        return True
-    dec = _decision_section_vitaldb(text)
-    vals = _extract_values_with_unit(dec, unit)
-    if not vals:
-        return False
-
-    best_ratio = None
-    best_diff = None
-    for v in vals:
-        ratio = max(v, target) / max(min(v, target), 1e-9)
-        diff = abs(v - target)
-        best_ratio = ratio if best_ratio is None else min(best_ratio, ratio)
-        best_diff = diff if best_diff is None else min(best_diff, diff)
-
-    if best_ratio is None or best_diff is None:
-        return False
-    if unit == "mL/h":
-        return (best_ratio <= 1.35) or (best_diff <= max(3.0, target * 0.2))
-    if unit == "mL":
-        return (best_ratio <= 1.5) or (best_diff <= max(0.5, target * 0.35))
-    if unit == "vol%":
-        return (best_ratio <= 1.4) or (best_diff <= 0.8)
-    if unit == "MAC":
-        return (best_ratio <= 1.4) or (best_diff <= 0.25)
-    return best_ratio <= 1.5
-
-
 def _is_concrete_miller_instruction(text: str, snapshot: Dict[str, Any]) -> bool:
     expected_unit = _expected_action_unit(snapshot)
     dec = _decision_section(text)
     if not dec:
         return False
-    action_clause = _extract_miller_action_clause(dec)
-    lower = action_clause.lower()
+    lower = dec.lower()
     action_tokens = ("上调", "下调", "滴定", "追加", "减量", "增量", "维持", "暂停", "给予", "复评", "titrate", "bolus")
-    has_action = any(tok in action_clause for tok in action_tokens) or any(tok in lower for tok in action_tokens)
-    has_recheck = bool(re.search(r"\d+(?:\.\d+)?\s*(?:s|sec|秒|min|分钟)", action_clause, re.IGNORECASE)) or ("复评" in action_clause)
-    has_quant = _has_explicit_dose_or_rate(action_clause)
-    has_drug = _has_explicit_drug_name(action_clause, snapshot)
+    has_action = any(tok in dec for tok in action_tokens) or any(tok in lower for tok in action_tokens)
+    has_recheck = bool(re.search(r"\d+(?:\.\d+)?\s*(?:s|sec|秒|min|分钟)", dec, re.IGNORECASE)) or ("复评" in dec)
+    has_quant = bool(re.search(r"\d+(?:\.\d+)?\s*(?:mL/h|mL|mmHg|bpm|%|vol%|MAC)", dec, re.IGNORECASE))
     has_diag_kv = bool(re.search(r"诊断依据\s*[:：=]", dec))
     has_action_kv = bool(re.search(r"具体干预\s*[:：=]", dec))
     has_quote_kv = bool(re.search(r"原文摘录\s*[:：=]", dec))
     if not expected_unit:
-        return has_action and has_recheck and has_quant and has_drug and has_diag_kv and has_action_kv and has_quote_kv
-    has_unit = _contains_expected_unit(action_clause, expected_unit) or _has_unit_unconvertible_reason(action_clause) or _has_unit_unconvertible_reason(dec)
-    return has_action and has_recheck and has_quant and has_drug and has_unit and has_diag_kv and has_action_kv and has_quote_kv
+        return has_action and has_recheck and has_quant and has_diag_kv and has_action_kv and has_quote_kv
+    has_unit = _contains_expected_unit(dec, expected_unit) or _has_unit_unconvertible_reason(dec)
+    return has_action and has_recheck and has_quant and has_unit and has_diag_kv and has_action_kv and has_quote_kv
 
 
 def _is_unit_consistent_across_decisions(text: str, snapshot: Dict[str, Any]) -> bool:
@@ -4201,23 +6509,11 @@ def _is_unit_consistent_across_decisions(text: str, snapshot: Dict[str, Any]) ->
     if not expected_unit:
         return True
     miller_dec = _decision_section(text)
-    miller_action = _extract_miller_action_clause(miller_dec)
     vital_dec = _decision_section_vitaldb(text)
-    has_miller_expected = _contains_expected_unit(miller_action, expected_unit)
-    has_vital_expected = _contains_expected_unit(vital_dec, expected_unit)
-    if has_miller_expected and has_vital_expected:
-        m_vals = _extract_values_with_unit(miller_action, expected_unit)
-        v_vals = _extract_values_with_unit(vital_dec, expected_unit)
-        if not m_vals or not v_vals:
-            return True
-        best_ratio = None
-        for mv in m_vals:
-            for vv in v_vals:
-                ratio = max(mv, vv) / max(min(mv, vv), 1e-9)
-                best_ratio = ratio if best_ratio is None else min(best_ratio, ratio)
-        return (best_ratio is not None) and (best_ratio <= 3.0)
+    if _contains_expected_unit(miller_dec, expected_unit) and _contains_expected_unit(vital_dec, expected_unit):
+        return True
     # Allow fallback when precise conversion is impossible and explicitly justified.
-    if _has_unit_unconvertible_reason(miller_action) or _has_unit_unconvertible_reason(vital_dec):
+    if _has_unit_unconvertible_reason(miller_dec) or _has_unit_unconvertible_reason(vital_dec):
         return True
     return False
 
@@ -4227,7 +6523,6 @@ def _extract_structured_qa_fields(qa_text: Optional[str], snapshot: Optional[Dic
         return {
             "miller_evidence_kv": {"evidence_quote": "", "chapter_paragraph": ""},
             "unit_consistency": {"expected_action_unit": "", "consistent": False},
-            "vitaldb_alignment": {"close_to_logged_action": False},
         }
     snap = snapshot if isinstance(snapshot, dict) else {}
     expected_unit = _expected_action_unit(snap)
@@ -4236,9 +6531,6 @@ def _extract_structured_qa_fields(qa_text: Optional[str], snapshot: Optional[Dic
         "unit_consistency": {
             "expected_action_unit": expected_unit,
             "consistent": _is_unit_consistent_across_decisions(qa_text, snap),
-        },
-        "vitaldb_alignment": {
-            "close_to_logged_action": _is_vitaldb_close_to_logged_action(qa_text, snap),
         },
     }
 
@@ -4277,9 +6569,6 @@ def _repair_qa_output(client: Any, model: str, raw_text: str, snapshot: Dict[str
     actual = hint.get("actual_intervention", "")
     kws = hint.get("keywords", [])
     kw_text = ", ".join(kws) if kws else "N/A"
-    expected_unit = _expected_action_unit(snapshot) or "N/A"
-    target_value = _expected_action_numeric(snapshot)
-    target_text = f"{target_value:.2f} {expected_unit}" if (target_value is not None and expected_unit != "N/A") else "N/A"
     repair_sys = (
         "You are a strict medical QA formatter. "
         "Return only final QA in Chinese. "
@@ -4289,25 +6578,19 @@ def _repair_qa_output(client: Any, model: str, raw_text: str, snapshot: Dict[str
         "Rewrite to strict format. You MUST output EXACTLY this 4-line template:\n"
         "Q: <只包含病人背景+术中生理信号当前值与趋势的问题，结尾询问最合理干预措施>\n"
         "A: 【临床推理】：<1-3句>\n"
-        "【决策干预（Miller）】：诊断依据：...; 具体干预：...; 原文摘录：\"...\" [M10 | 术中相关章节: ... | p.1493]\n"
-        "【决策干预（VitalDB）】：<1句；给出药物+方向+核心数值+单位，不得擅自补写复评或下一步条件>\n\n"
+        "【决策干预（Miller）】：诊断依据：...; 具体干预：...; 原文摘录：\"...\" [M10#1 | 术中相关章节: ... | p.1493]\n"
+        "【决策干预（VitalDB）】：<1-2句；必须是具体可执行指令（药物+方向+幅度/目标+复评时间+下一步条件），并与Miller执行单位一致>\n\n"
         "Do not output Analyze/Strategy/Constraint Check/self-correction text.\n"
         "Do not output anything outside the 4-line QA block.\n"
         "Q line must NOT include citation tags, logged_action, anchor metadata, or subjective clinical interpretation/hints.\n"
-        "Final VitalDB text must NOT mention logged_action/actual_intervention/golden/与记录一致/对照记录; keep only executable clinical action.\n"
         "Miller 诊断依据 must cite objective physiologic signals/trends (MAP/HR/SpO2/BIS when available), not vague statements.\n"
         "Use normalized units: MAP mmHg, HR bpm, SpO2 %, BIS index, infusion mL/h, bolus mL, volatile vol%.\n"
         "Miller line must include at least one M10 locator token and contain all three parts: 诊断依据 + 具体干预 + 原文摘录.\n"
-        "Miller“具体干预”必须包含：明确药物名 + 数字剂量/速率 + 单位 + 复评时间 + 复评指标 + 若...则...下一步条件。\n"
-        "禁止“适度增加/小步调整/酌情”等无数值措辞。\n"
-        "若执行单位为mL/h，Miller“具体干预”优先写目标泵速（例如31.6-35 mL/h），增量只作补充，避免只写+0.1-0.2 mL/h。\n"
         "If precise unit conversion is impossible due to missing body weight or drug concentration, keep original units and briefly explain why; never fabricate numbers.\n"
         f"Golden logged_action: {actual}\n"
         f"Golden medication_key: {med_key}\n"
         f"Expected drug keywords in 【决策干预（VitalDB）】: {kw_text}\n"
-        f"Required actionable dose/rate unit in BOTH decision lines: {expected_unit}\n"
-        f"VitalDB numeric target reference (from logged_action/anchor): {target_text}\n"
-        "【决策干预（VitalDB）】数值与单位需与上述目标值保持一致（允许仅文字改写，不允许无依据数值改动）。\n"
+        f"Required actionable dose/rate unit in BOTH decision lines: {_expected_action_unit(snapshot) or 'N/A'}\n"
         "【决策干预（VitalDB）】必须与golden logged_action同药物类别，不得矛盾。\n"
         "Source text:\n"
         f"{raw_text}"
@@ -4524,7 +6807,6 @@ def generate_single_qa(
         and _is_concrete_miller_instruction(cleaned, snapshot)
         and _is_concrete_vitaldb_instruction(cleaned, snapshot)
         and _is_unit_consistent_across_decisions(cleaned, snapshot)
-        and _is_vitaldb_close_to_logged_action(cleaned, snapshot)
     ):
         return cleaned
 
@@ -4537,7 +6819,6 @@ def generate_single_qa(
             and _is_concrete_miller_instruction(repaired_cleaned, snapshot)
             and _is_concrete_vitaldb_instruction(repaired_cleaned, snapshot)
             and _is_unit_consistent_across_decisions(repaired_cleaned, snapshot)
-            and _is_vitaldb_close_to_logged_action(repaired_cleaned, snapshot)
         ):
             return repaired_cleaned
 
@@ -4900,10 +7181,20 @@ def evaluate_vitaldb_vs_miller(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     hr_now = _safe_float(recent.get("HR_bpm"))
     spo2_now = _safe_float(recent.get("SpO2_pct"))
     bis_now = _safe_float(recent.get("BIS"))
+    co_now = _safe_float(recent.get("CO_L_min"))
+    ci_now = _safe_float(recent.get("CI_L_min_m2"))
+    sv_now = _safe_float(recent.get("SV_ml"))
+    ppv_now = _safe_float(recent.get("PPV_pct"))
+    svr_now = _safe_float(recent.get("SVR_dyns_cm5"))
     map_drop_pct = _safe_float(baseline.get("MAP_drop_from_baseline_pct"))
     map_lt_65_persist = _safe_float(persistence.get("map_lt_65")) or 0.0
     map_lt_55_persist = _safe_float(persistence.get("map_lt_55")) or 0.0
     spo2_lt_90_persist = _safe_float(persistence.get("spo2_lt_90")) or 0.0
+    ci_lt_low_persist = _safe_float(persistence.get("ci_lt_low")) or 0.0
+    co_lt_low_persist = _safe_float(persistence.get("co_lt_low")) or 0.0
+    sv_lt_low_persist = _safe_float(persistence.get("sv_lt_low")) or 0.0
+    ppv_ge_13_persist = _safe_float(persistence.get("ppv_ge_13")) or 0.0
+    svr_lt_low_persist = _safe_float(persistence.get("svr_lt_low")) or 0.0
 
     critical_sec = float(MILLER_POLICY_THRESHOLDS["critical_window_sec"])
     hemo_sec = float(MILLER_POLICY_THRESHOLDS["hemodynamic_window_sec"])
@@ -4950,6 +7241,28 @@ def evaluate_vitaldb_vs_miller(snapshot: Dict[str, Any]) -> Dict[str, Any]:
 
     if map_low:
         _add_strategy("avoid_vasodilator_when_map_low", "MAP<65时应避免先行扩血管药（硝酸甘油/米力农）升级。")
+    advanced_low_output = (
+        (ci_now is not None and ci_now < ANES_THRESHOLDS["ci_low_l_min_m2"])
+        or (co_now is not None and co_now < ANES_THRESHOLDS["co_low_l_min"])
+        or (sv_now is not None and sv_now < ANES_THRESHOLDS["sv_low_ml"])
+        or ci_lt_low_persist >= hemo_sec
+        or co_lt_low_persist >= hemo_sec
+        or sv_lt_low_persist >= hemo_sec
+    )
+    advanced_volume_responsive = (
+        (ppv_now is not None and ppv_now >= ANES_THRESHOLDS["ppv_high_pct"])
+        or ppv_ge_13_persist >= hemo_sec
+    )
+    advanced_vasodilation = (
+        (svr_now is not None and svr_now < ANES_THRESHOLDS["svr_low_dyns_cm5"])
+        or svr_lt_low_persist >= hemo_sec
+    )
+    if advanced_low_output:
+        _add_strategy("assess_cardiac_output_and_perfusion", "CO/CI/SV提示低心排趋势，应优先复核灌注和容量。")
+    if advanced_volume_responsive:
+        _add_strategy("consider_fluid_responsiveness", "PPV升高提示容量反应性，建议先做容量优化评估。")
+    if advanced_vasodilation:
+        _add_strategy("consider_vasopressor_support", "SVR偏低提示血管扩张，可考虑血管活性支持。")
 
     if (
         bis_now is not None
@@ -5152,8 +7465,6 @@ def _record_has_trainable_qa(rec: Dict[str, Any]) -> bool:
     if not _is_concrete_vitaldb_instruction(cleaned, snap if isinstance(snap, dict) else None):
         return False
     if isinstance(snap, dict) and not _is_unit_consistent_across_decisions(cleaned, snap):
-        return False
-    if isinstance(snap, dict) and not _is_vitaldb_close_to_logged_action(cleaned, snap):
         return False
     return True
 
@@ -5432,7 +7743,6 @@ def clean_jsonl_file(
                         _is_concrete_miller_instruction(cleaned, snap)
                         and _is_concrete_vitaldb_instruction(cleaned, snap)
                         and _is_unit_consistent_across_decisions(cleaned, snap)
-                        and _is_vitaldb_close_to_logged_action(cleaned, snap)
                     )
                 rec[field] = cleaned
                 rec.update(_extract_structured_qa_fields(cleaned, rec.get("snapshot", {})))
@@ -5496,6 +7806,36 @@ def parse_args() -> PipelineConfig:
     parser.add_argument("--min-window-points", type=int, default=60)
     parser.add_argument("--anes-dur-min", type=float, default=30.0)
     parser.add_argument("--rate-delta-threshold", type=float, default=0.5)
+    parser.add_argument(
+        "--rate-sustained-pre-window-sec",
+        type=float,
+        default=90.0,
+        help="For Orchestra *_RATE anchors: pre window seconds for sustained-change check.",
+    )
+    parser.add_argument(
+        "--rate-sustained-post-window-sec",
+        type=float,
+        default=120.0,
+        help="For Orchestra *_RATE anchors: post window seconds for sustained-change check.",
+    )
+    parser.add_argument(
+        "--rate-sustained-min-abs-delta",
+        type=float,
+        default=3.0,
+        help="Minimum sustained median rate change (mL/h) to keep RATE anchor.",
+    )
+    parser.add_argument(
+        "--rate-sustained-min-ratio",
+        type=float,
+        default=0.6,
+        help="Minimum directional consistency ratio in post window for RATE anchor (0-1).",
+    )
+    parser.add_argument(
+        "--rate-sustained-min-points",
+        type=int,
+        default=10,
+        help="Minimum non-null points required in each pre/post window for sustained RATE check.",
+    )
     parser.add_argument("--vol-delta-threshold", type=float, default=0.03)
     parser.add_argument("--vol-rate-lookback-sec", type=float, default=60.0)
     parser.add_argument("--min-anchor-gap-sec", type=float, default=30.0)
@@ -5529,8 +7869,8 @@ def parse_args() -> PipelineConfig:
     parser.add_argument(
         "--anchor-mode",
         default="medication",
-        choices=["medication", "arrdb", "hybrid", "periodic"],
-        help="Anchor source mode: medication deltas, arrdb labels, hybrid, or unlabeled periodic sampling.",
+        choices=["medication", "arrdb", "hybrid", "periodic", "joint"],
+        help="Anchor source mode: medication deltas, arrdb labels, hybrid, periodic, or joint (vital-alert + medication linkage).",
     )
     parser.add_argument(
         "--arrdb-annotation-dir",
@@ -5551,6 +7891,17 @@ def parse_args() -> PipelineConfig:
         type=float,
         default=300.0,
         help="For periodic mode: first anchor time in seconds.",
+    )
+    parser.add_argument(
+        "--joint-link-max-gap-sec",
+        type=float,
+        default=60.0,
+        help="For joint mode: max allowed time gap between vital-alert anchor and nearest medication anchor.",
+    )
+    parser.add_argument(
+        "--joint-allow-unknown-without-med",
+        action="store_true",
+        help="For joint mode: keep vital-alert anchors even when no nearby medication anchor exists.",
     )
     parser.add_argument("--enable-llm", action="store_true")
     parser.add_argument("--llm-model", default="Qwen/Qwen2.5-14B-Instruct")
@@ -5627,9 +7978,9 @@ def parse_args() -> PipelineConfig:
     )
     parser.add_argument(
         "--miller-bis-intent-mode",
-        default="paired_only",
-        choices=["full", "paired_only", "off"],
-        help="How strongly BIS drives Miller retrieval intents: full / paired_only / off.",
+        default="dynamic",
+        choices=["dynamic", "full", "paired_only", "off"],
+        help="How BIS drives Miller retrieval intents: dynamic(推荐) / full / paired_only / off.",
     )
     parser.add_argument(
         "--miller-depth-focus-weight",
@@ -5765,6 +8116,11 @@ def parse_args() -> PipelineConfig:
         min_window_points=args.min_window_points,
         anes_dur_min=args.anes_dur_min,
         rate_delta_threshold=args.rate_delta_threshold,
+        rate_sustained_pre_window_sec=max(20.0, float(args.rate_sustained_pre_window_sec)),
+        rate_sustained_post_window_sec=max(20.0, float(args.rate_sustained_post_window_sec)),
+        rate_sustained_min_abs_delta=max(0.5, float(args.rate_sustained_min_abs_delta)),
+        rate_sustained_min_ratio=max(0.0, min(1.0, float(args.rate_sustained_min_ratio))),
+        rate_sustained_min_points=max(3, int(args.rate_sustained_min_points)),
         vol_delta_threshold=args.vol_delta_threshold,
         vol_rate_lookback_sec=args.vol_rate_lookback_sec,
         min_anchor_gap_sec=args.min_anchor_gap_sec,
@@ -5789,6 +8145,8 @@ def parse_args() -> PipelineConfig:
         arrdb_keep_normal=args.arrdb_keep_normal,
         periodic_anchor_step_sec=args.periodic_anchor_step_sec,
         periodic_anchor_start_sec=args.periodic_anchor_start_sec,
+        joint_link_max_gap_sec=max(5.0, float(args.joint_link_max_gap_sec)),
+        joint_require_med_link=(not bool(args.joint_allow_unknown_without_med)),
         department_include=args.department_include,
         llm_max_workers=args.llm_max_workers,
         llm_progress_every=args.llm_progress_every,
