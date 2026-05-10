@@ -812,20 +812,60 @@ def _infer_route(snapshot: Dict[str, Any]) -> str:
 
 
 def _format_maintenance_state(snapshot: Dict[str, Any]) -> str:
+    anchor = snapshot.get("anchor_detail", {}) if isinstance(snapshot.get("anchor_detail"), dict) else {}
+    anchor_key = _safe_text(anchor.get("medication_key"), "").upper()
+    anchor_base = anchor_key.rsplit("_", 1)[0] if "_" in anchor_key else anchor_key
+    anchor_before = _to_float(anchor.get("before"))
+
     concurrent_active = snapshot.get("concurrent_medications_active", [])
     concurrent_all = snapshot.get("concurrent_medications", [])
     concurrent = concurrent_active if (isinstance(concurrent_active, list) and concurrent_active) else concurrent_all
+    if isinstance(concurrent, list) and isinstance(concurrent_all, list) and anchor_base:
+        has_anchor = False
+        for item in concurrent:
+            if not isinstance(item, dict):
+                continue
+            item_rate_key = _safe_text(item.get("rate_key"), "").upper()
+            item_base = _safe_text(item.get("med_base"), "").upper()
+            if item_rate_key == anchor_key or item_base == anchor_base:
+                has_anchor = True
+                break
+        if not has_anchor:
+            for item in concurrent_all:
+                if not isinstance(item, dict):
+                    continue
+                item_rate_key = _safe_text(item.get("rate_key"), "").upper()
+                item_base = _safe_text(item.get("med_base"), "").upper()
+                if item_rate_key == anchor_key or item_base == anchor_base:
+                    concurrent = [*concurrent, item]
+                    break
+
     if isinstance(concurrent, list) and concurrent:
         med_parts: List[str] = []
         for item in concurrent:
             if not isinstance(item, dict):
                 continue
-            name = _safe_text(item.get("display_name"), _safe_text(item.get("med_base"), "未知药物"))
+            item_rate_key = _safe_text(item.get("rate_key"), "").upper()
+            item_base = _safe_text(item.get("med_base"), "").upper()
+            display_name = _safe_text(item.get("display_name"), "")
+            canonical_name = _safe_text(MEDICATION_DISPLAY.get(item_rate_key), "")
+            if canonical_name:
+                name = canonical_name
+            else:
+                name = display_name if display_name else _safe_text(item.get("med_base"), "未知药物")
+            name = _normalize_med_display_name(name, item_rate_key or item_base)
             rate_v = _to_float(item.get("rate_value"))
             rate_unit = _safe_text(item.get("rate_unit"), "")
+            is_anchor_rate = (
+                bool(anchor_key.endswith("_RATE"))
+                and (item_rate_key == anchor_key or item_base == anchor_base)
+            )
             vol_v = _to_float(item.get("volume_ml"))
             bits: List[str] = []
-            if rate_v is not None and abs(float(rate_v)) >= 0.01:
+            if is_anchor_rate and anchor_before is not None:
+                unit_txt = rate_unit if rate_unit else "mL/h"
+                bits.append(f"速率 {anchor_before:.2f} {unit_txt}")
+            elif rate_v is not None and abs(float(rate_v)) >= 0.01:
                 if rate_unit:
                     bits.append(f"速率 {rate_v:.2f} {rate_unit}")
                 else:
@@ -837,7 +877,6 @@ def _format_maintenance_state(snapshot: Dict[str, Any]) -> str:
         if med_parts:
             return "；".join(med_parts)
 
-    anchor = snapshot.get("anchor_detail", {}) if isinstance(snapshot.get("anchor_detail"), dict) else {}
     med_key = _safe_text(anchor.get("medication_key"), "未知药物")
     med_key_upper = med_key.upper()
     med_name = MEDICATION_DISPLAY.get(med_key, _to_cn_text(med_key))
@@ -881,10 +920,7 @@ def _format_maintenance_state(snapshot: Dict[str, Any]) -> str:
     if rate is not None:
         pieces.append(f"当前平滑泵速约 {rate:.2f} mL/h")
     if med_key_upper.endswith("_VOL"):
-        current_vol = after if after is not None else before
-        if current_vol is not None:
-            pieces.append(f"当前累计量约 {current_vol:.2f} mL")
-        elif delta is not None:
+        if rate is None and delta is not None:
             pieces.append(f"本次变化 {delta:+.3f} mL")
     elif before is not None and after is not None:
         pieces.append(f"累计量 {before:.2f}→{after:.2f} mL")
@@ -892,6 +928,93 @@ def _format_maintenance_state(snapshot: Dict[str, Any]) -> str:
         unit = " mL" if med_key_upper.endswith("_VOL") else ""
         pieces.append(f"本次变化 {delta:+.3f}{unit}")
     return "；".join(pieces)
+
+
+def _strip_cumulative_action_evidence(text: str) -> str:
+    out = str(text or "")
+    out = re.sub(r"[；;，,]?\s*对应[^；;。]*?累计量约\s*[-+]?\d+(?:\.\d+)?\s*mL", "", out)
+    out = re.sub(r"[；;，,]?\s*对应[^；;。]*?累积量约\s*[-+]?\d+(?:\.\d+)?\s*mL", "", out)
+    return out.strip("；;，, ")
+
+
+def _normalize_med_display_name(name: str, med_key: str = "") -> str:
+    txt = str(name or "")
+    key = str(med_key or "").upper()
+    if "RFTN20" in key:
+        txt = txt.replace("20浓度", "20 ug/mL")
+    if "RFTN50" in key:
+        txt = txt.replace("50浓度", "50 ug/mL")
+    return txt
+
+
+def _display_for_action_key(med_key: str) -> str:
+    key = str(med_key or "").upper()
+    if key.endswith("_VOL"):
+        rate_key = f"{key.rsplit('_', 1)[0]}_RATE"
+        label = MEDICATION_DISPLAY.get(rate_key) or MEDICATION_DISPLAY.get(key) or _to_cn_text(key)
+    else:
+        label = MEDICATION_DISPLAY.get(key) or _to_cn_text(key)
+    label = _normalize_med_display_name(str(label), key)
+    return re.sub(r"(累计量|累积量)", "", str(label)).strip()
+
+
+def _rate_from_volume_anchor(anchor: Dict[str, Any]) -> Optional[float]:
+    smoothed_rate = _to_float(anchor.get("smoothed_rate_ml_per_h"))
+    smoothed_dt = _to_float(anchor.get("smoothed_dt_sec"))
+    if smoothed_rate is not None and (smoothed_dt is None or smoothed_dt >= 30.0):
+        return smoothed_rate
+    inferred_rate = _to_float(anchor.get("inferred_rate_ml_per_h"))
+    dt_sec = _to_float(anchor.get("dt_sec"))
+    if inferred_rate is not None and dt_sec is not None and dt_sec >= 10.0:
+        return inferred_rate
+    return smoothed_rate if smoothed_rate is not None else inferred_rate
+
+
+def _clinical_logged_action_text(snapshot: Dict[str, Any], fallback: str = "") -> str:
+    anchor = snapshot.get("anchor_detail", {}) if isinstance(snapshot.get("anchor_detail"), dict) else {}
+    med_key = str(anchor.get("medication_key") or "").upper()
+    route = _infer_route(snapshot)
+    label = _display_for_action_key(med_key)
+    before = _to_float(anchor.get("before"))
+    after = _to_float(anchor.get("after"))
+    delta = _to_float(anchor.get("delta"))
+    if med_key.endswith("_VOL"):
+        rate = _rate_from_volume_anchor(anchor)
+        if rate is not None:
+            return f"{label}{route}约 {rate:.2f} mL/h"
+        return f"{label}{route}，按当前可执行泵速维持或调整"
+    if med_key.endswith("_RATE") and before is not None and after is not None:
+        return f"{label}{route}速率由约 {before:.3f} mL/h 调至 {after:.3f} mL/h"
+    if med_key.endswith("_RATE") and delta is not None:
+        return f"{label}{route}速率调整 {delta:+.3f} mL/h"
+    return _strip_cumulative_action_evidence(fallback)
+
+
+def _clinical_logged_action_bundle_text(snapshot: Dict[str, Any]) -> str:
+    changes = snapshot.get("medication_changes_near_alert", [])
+    if not isinstance(changes, list):
+        return ""
+    parts: List[str] = []
+    for item in changes[:6]:
+        if not isinstance(item, dict):
+            continue
+        med_key = str(item.get("medication_key") or "").upper()
+        if not med_key:
+            continue
+        label = _display_for_action_key(med_key)
+        before = _to_float(item.get("before"))
+        after = _to_float(item.get("after"))
+        delta = _to_float(item.get("delta"))
+        if med_key.endswith("_VOL"):
+            rate = _rate_from_volume_anchor(item)
+            if rate is not None:
+                parts.append(f"{label}静脉泵注约 {rate:.2f} mL/h")
+            continue
+        if med_key.endswith("_RATE") and before is not None and after is not None:
+            parts.append(f"{label}速率由约 {before:.3f} 调至 {after:.3f} mL/h")
+        elif med_key.endswith("_RATE") and delta is not None:
+            parts.append(f"{label}速率调整 {delta:+.3f} mL/h")
+    return "；".join(parts)
 
 
 def _format_vital_trend_line(snapshot: Dict[str, Any], key: str, display: str) -> str:
@@ -1009,11 +1132,11 @@ def _build_document_monitoring_summary_lines(snapshot: Dict[str, Any]) -> List[s
         rso2_text = f"{rso2_l_text or '未监测'} / {rso2_r_text or '未监测'}"
 
     return [
-        "监测优先级：呼吸(SpO2/EtCO2) > 循环(ECG/HR/SBP/DBP/MAP/CO/CI/SV/SVV/PPV/CVP/SVR) > 体温 > 脑功能(BIS/rSO2) > 凝血/ABG/出入量。",
+        "监测优先级：呼吸(SpO2/EtCO2) > 循环(ECG/HR/SBP/DBP/MAP/CO/CI/SV/SVV/PPV/CVP/SVR) > 体温 > 脑功能(BIS/rSO2) > 凝血/ABG。",
         f"呼吸：SpO2 {_cur(['SpO2_pct'], '%')}（下降{spo2_drop_text}，警戒<{spo2_warn:.0f}%，硬阈值<{spo2_low:.0f}%）；EtCO2 {_cur(['EtCO2_mmhg'], ' mmHg')}（插管后应连续显示，缺失>{etco2_missing_alert:.0f}s且非校零应立即排查气道/回路）。",
         f"循环：HR {_cur(['HR_bpm'], ' bpm')}（基线变化{hr_change_text}）；SBP/DBP/MAP {_cur(['SBP_mmhg'], ' mmHg')} / {_cur(['DBP_mmhg'], ' mmHg')} / {_cur(['MAP_mmhg'], ' mmHg')}（MAP下降{map_drop_text}，灌注下限约{map_low:.0f} mmHg）；{advanced_hemo_text}。",
         f"体温/脑保护：体温 {bt_text}（<{temp_low:.1f}℃低体温，>{temp_fever:.1f}℃发热，≥{temp_critical:.1f}℃高热）；BIS {bis_text}（建议{bis_low:.0f}-{bis_high:.0f}，仅作提示）；rSO2-L/R {rso2_text}（<{rso2_low:.0f}%或较基线下降>20%异常）。",
-        "化验/并发症：ABG（PaO2/PaCO2/pH/乳酸/K/BE）极端值、TEG/ACT异常、尿量<5 mL/h、出血量显著增加、过敏/休克/恶性心律失常/高血糖/低钾/高钾等均需及时预警。",
+        "化验/并发症：ABG（PaO2/PaCO2/pH/乳酸/K/BE）极端值、TEG/ACT异常、过敏/休克/恶性心律失常/高血糖/低钾/高钾等均需及时预警。",
     ]
 
 
@@ -1052,7 +1175,7 @@ def _build_event_and_lab_alert_lines(snapshot: Dict[str, Any]) -> List[str]:
     event_names = [pretty.get(str(x), str(x)) for x in adverse_types[:8] if str(x).strip()]
     line1 = f"并发症标签：{'；'.join(event_names) if event_names else '当前未显式命中并发症标签'}。"
     line2 = "需重点监控：过敏、休克、大出血、恶性心律失常、高血糖、低钾/高钾、低氧血症及气道/回路异常。"
-    line3 = "若出现ABG/TEG/ACT极端值或尿量/出血量快速恶化，应升级预警并立即复评。"
+    line3 = "若出现ABG/TEG/ACT极端值，应升级预警并立即复评。"
     return [line1, line2, line3]
 
 
@@ -1139,7 +1262,7 @@ def _build_sensitivity_policy_lines(snapshot: Dict[str, Any]) -> List[str]:
         f"中敏感：MAP灌注下限约{map_low:.0f} mmHg；HR较个体基线变化≥{hr_relative:.0f}%需干预评估；BIS仅作趋势提示。",
         f"容量/循环：CO约{co_low:.1f}-{co_high:.1f} L/min；CI约{ci_low:.1f}-{ci_high:.1f} L/(min·m²)；SV约{sv_low:.0f}-{sv_high:.0f} mL；SVV>{svv_high:.0f}%或PPV>13-15%提示容量反应性；CVP约{cvp_low:.0f}-{cvp_high:.0f} mmHg；SVR偏低提示血管扩张，偏高提示血管收缩/后负荷增高。",
         f"体温/脑保护：核心体温{temp_low:.1f}-{temp_high:.1f}℃，>= {temp_critical:.1f}℃按发热/高热处理；BIS维持{bis_low:.0f}-{bis_high:.0f}；rSO2< {rso2_low:.0f}%或较基线下降>20%需警惕脑灌注不足。",
-        f"化验/并发症：ABG/TEG/ACT极端值、尿量<5 mL/h、出血量增多、过敏/休克/恶性心律失常/高血糖/低钾/高钾等均需及时报警；ABG缺失本身若在高危手术或氧合通气不稳定场景也应尽快补测（阈值提示：{abg_missing_alert:.0f}s）。",
+        f"化验/并发症：ABG/TEG/ACT极端值、过敏/休克/恶性心律失常/高血糖/低钾/高钾等均需及时报警；ABG缺失本身若在高危手术或氧合通气不稳定场景也应尽快补测（阈值提示：{abg_missing_alert:.0f}s）。",
     ]
 
 
@@ -1151,14 +1274,6 @@ def _build_fixed_question(snapshot: Dict[str, Any]) -> str:
     asa = _safe_text(patient.get("asa"))
     surgery = _format_surgery_cn(snapshot.get("surgery_type"))
     stage = _format_stage_cn(snapshot.get("intraop_stage"))
-    intraop_summary = (
-        snapshot.get("clinical_table_structured", {}).get("intraop_summary", {})
-        if isinstance(snapshot.get("clinical_table_structured"), dict)
-        else {}
-    )
-    ebl = _to_float(intraop_summary.get("intraop_ebl")) if isinstance(intraop_summary, dict) else None
-    uo = _to_float(intraop_summary.get("intraop_uo")) if isinstance(intraop_summary, dict) else None
-
     trend_lines = [
         _format_vital_trend_line(snapshot, "BIS", "BIS"),
         _format_vital_trend_line(snapshot, "HR", "HR"),
@@ -1182,20 +1297,13 @@ def _build_fixed_question(snapshot: Dict[str, Any]) -> str:
     if not trend_lines:
         trend_lines = ["关键体征趋势暂缺（建议补齐术中连续波形监测）"]
 
-    surgery_extra = []
-    if ebl is not None:
-        surgery_extra.append(f"失血量约{ebl:.0f} mL")
-    if uo is not None:
-        surgery_extra.append(f"尿量约{uo:.0f} mL")
-    surgery_extra_text = f"；{'; '.join(surgery_extra)}" if surgery_extra else ""
-
     lines = [
         "【患者档案】",
         f"• 年龄/性别/体重/ASA分级：{age}岁，{sex}，{weight} kg，ASA {asa}。",
         f"• 关键术前基础疾病：{_format_preop_context(snapshot)}。",
         "【手术状态】",
         f"• 手术名称：{surgery}。",
-        f"• 手术阶段/当前进度：{stage}{surgery_extra_text}。",
+        f"• 手术阶段/当前进度：{stage}。",
         "【麻醉药物维持状态】",
         f"• 药物及当前给药状态：{_format_maintenance_state(snapshot)}。",
         "【体征序列】",
@@ -1220,8 +1328,8 @@ def _build_answer_user_prompt(
     hint = _golden_action_hint(snapshot)
     med_key = hint.get("medication_key", "")
     med_key_upper = str(med_key or "").upper()
-    actual = hint.get("actual_intervention", "")
-    actual_bundle = str(hint.get("actual_intervention_bundle") or "").strip()
+    actual = _clinical_logged_action_text(snapshot, str(hint.get("actual_intervention") or ""))
+    actual_bundle = _clinical_logged_action_bundle_text(snapshot)
     kws = ", ".join(hint.get("keywords", [])) if isinstance(hint.get("keywords"), list) else ""
     expected_unit = _expected_action_unit(snapshot) or "mL/h or mL"
     route = _infer_route(snapshot)
@@ -1252,20 +1360,40 @@ def _build_answer_user_prompt(
         "4) 内环境稳定（ABG/酸碱/电解质/乳酸/凝血/尿量/出血）；"
         "5) 其他辅助预警（如BIS/rSO2，仅作辅助）。",
         "【宏观策略】只写决策大方向。",
-        f"【具体干预】必须包含：药名 + 给药途径（至少包含“{route}”或同义表达） + 数值剂量/速率 + 单位（优先 {expected_unit}）。",
+        "【具体干预】必须按以下固定模板输出两段：",
+        (
+            f"（A）主干预：必须包含药名 + 给药途径（至少包含“{route}”或同义表达） + "
+            f"数值剂量/速率 + 单位（优先 {expected_unit}）。"
+        ),
+        (
+            "（B）同步安全处理：列出与主干预并发执行的安全动作（如气道/通气排查、补液/输血、"
+            "体位调整、复查ABG/TEG、升压/降压备用方案等），但不得在此新增原始记录动作文本中未出现的"
+            "具体药物名称及其剂量/速率。"
+        ),
     ]
     if include_review:
         constraints.append("【复评环节】必须包含复评时间、目标体征、预期演变、备用方案；其中“预期演变”需写明预计在多久后哪个指标变化到什么范围（如：1分钟后HR回升至约75 bpm）。")
     constraints.extend(
         [
-            f"VitalDB版的主干预必须锚定原始记录动作，不得把未记录动作写成已发生的VitalDB干预。原始记录动作：{actual}；药物关键词：{kws}。",
+            f"VitalDB版的主干预必须锚定真实给药动作的同类药物、方向和数值，不得把未记录动作写成已发生的VitalDB干预。可执行动作锚点：{actual}；药物关键词：{kws}。",
             (
-                f"同一警报窗口内还记录到以下药物变化，可作为VitalDB真实并行处理背景一起讨论：{actual_bundle}。"
+                f"同一警报窗口内的给药背景：{actual_bundle}。"
                 if actual_bundle
                 else "若未提供同一警报窗口内其它药物变化，不要虚构多药物处理。"
             ),
-            "【具体干预】第一句必须复述/改写logged_action中的同类药物、方向和数值；"
-            "未在logged_action中出现的给药、补液、升压、减药等只能作为“同步安全处理”或“备用方案”，不得新增具体药物剂量作为主决策。",
+            "【具体干预】（A）主干预段必须把真实给药动作转写为临床医嘱式动作，保留同类药物、方向和数值，"
+            "不得在该段新增原始记录动作中未出现的药物或剂量作为主决策。",
+            "（A）主干预禁止出现累计窗表达（如“累计量/累积量”“液量由A到B mL”“A mL→B mL”），"
+            "主句只写可执行的给药动作（药名+途径+剂量/速率+单位）。",
+            "（A）主干预必须直接写医生当下决策，不得出现“根据原始记录时间序列/根据记录时间序列/按原始记录时序/按时间序列”等回放来源措辞。",
+            "（A）主干预禁止出现“下达医嘱：”“执行医嘱：”“主干预：”等前缀套话，"
+            "请直接从可执行动作开始写（如“去甲肾上腺素静脉泵注0.06 ug/kg/min维持灌注”）。",
+            "（B）同步安全处理只能写并发安全动作（如气道排查、补液方案、备用升压/降压），"
+            "不得在此段新增与原始记录动作无关的具体药物剂量/速率。",
+            "【具体干预】必须使用临床医生口吻，禁止出现“根据原始记录时间序列”“轨道数据显示”“logged_action”等工程化措辞；"
+            "推荐写法如“先给予……，随后……，并同步……”。",
+            "正文禁止出现“与VitalDB记录一致”“记录到”“原始记录显示”“由记录可见”等抄写式表达；"
+            "改用“基于当前病情判断”“考虑……机制”“先……后……”等临床决策口吻。",
             "最终输出不得出现任何内部元字段或提示词痕迹，如“med_key=”“logged_action=”“keywords=”等。",
             "若存在SpO2<90%或EtCO2异常，可优先写气道/通气排查等安全动作；但需明确这是临床安全处理，不是VitalDB记录的药物动作。",
             "BIS只做辅助提示，不得脱离MAP/HR/SpO2/EtCO2单独下结论；"
@@ -1282,7 +1410,9 @@ def _build_answer_user_prompt(
     )
     if med_key_upper.endswith("_VOL"):
         constraints.append(
-            "若锚点是累计量轨道（*_VOL），【具体干预】主句必须以“累计量 before->after mL（及变化量）”复述，不要把其改写为新的目标速率。"
+            "若锚点是累计量轨道（*_VOL），（A）主干预仍按可执行动作写“维持/调整某药静脉泵注速率约X mL/h”；"
+            "不得在（A）主干预写“累计量/累积量”或“液量由A到B mL”类表达。"
+            "累计量只允许出现在问题上下文的【麻醉药物维持状态】中，不要写入答案正文。"
         )
     if low_perf_risk:
         map_txt = f"{map_now:.1f}" if map_now is not None else "暂缺"
@@ -1393,26 +1523,61 @@ def _repair_structured_answer(
 
     rules = [
         "1) 【具体干预】必须写药名+给药途径+剂量/速率+单位。",
+        "1.1) 【具体干预】必须写成固定两段：(A)主干预；(B)同步安全处理。",
+        "1.2) (A)主干预必须把真实给药动作转写为临床医嘱式动作，保留同类药物、方向与数值。",
+        "1.2a) (A)主干预禁止出现累计窗表达（累计量/累积量/液量由A到B mL/A mL→B mL），只写可执行给药动作。",
+        "1.2b) (A)主干预必须直接写可执行干预动作，不得出现“根据原始记录时间序列/根据记录时间序列/按原始记录时序/按时间序列”等回放来源措辞。",
+        "1.2c) (A)主干预禁止出现“下达医嘱：”“执行医嘱：”“主干预：”等前缀套话。",
+        "1.3) (B)同步安全处理不得新增与原始记录动作无关的具体药物剂量/速率。",
+        "1.4) 必须用临床口吻，不得出现“根据原始记录时间序列/轨道数据显示/logged_action”等工程措辞。",
+        "1.5) 禁止“与VitalDB记录一致/记录到/原始记录显示/由记录可见”等抄写式表达，改写为临床判断语句。",
         "X) 禁止输出内部元字段/提示词痕迹：med_key=、logged_action=、keywords=、anchor_detail。",
     ]
+    if "missing_route" in str(reasons):
+        rules.append("1.R) （A）主干预第一句必须显式包含给药途径词：静脉推注/静脉泵注/静脉持续输注/吸入/口服之一。")
+    if "missing_expected_evolution_target" in str(reasons):
+        rules.append("1.E) 【复评环节-预期演变】必须至少写1句“时间+指标+方向+目标值+单位”，例如“1分钟后SpO2回升至≥94%”。")
+    if "missing_expected_evolution_field" in str(reasons):
+        rules.append("1.EF) 【复评环节】必须显式逐行包含4个字段名：复评时间：、目标体征：、预期演变：、备用方案：。")
+    if "missing_recheck_time" in str(reasons):
+        rules.append("1.T) “复评时间：”必须包含明确时间（如1分钟后/3分钟后）。")
+    if "unsafe_bis_target_above_60_in_general_anesthesia" in str(reasons):
+        rules.append("1.B) 若提及BIS目标，必须写为40-60；禁止任何>60的BIS目标表达。")
+    if any(x in str(reasons) for x in ("a_main_contains_cumulative_volume", "intervention_contains_cumulative_volume", "review_contains_cumulative_volume")):
+        rules.append("1.C) 把答案正文中的累计窗表达（累计量/累积量/液量由A到B mL/A mL→B mL）全部移除，改写为“药名+途径+剂量/速率+单位”；累计量只允许出现在问题上下文的【麻醉药物维持状态】中。")
+    if "a_main_contains_record_replay_phrase" in str(reasons):
+        rules.append("1.S) （A）主干预首句必须直接写可执行动作（药名+途径+剂量/速率+单位），删除“根据记录/按时间序列/由记录可见”等来源回放措辞。")
+    if any(x in str(reasons) for x in ("a_main_contains_order_label_phrase", "a_main_repeats_heading_phrase")):
+        rules.append("1.H) 删除（A）主干预中的“下达医嘱：/执行医嘱：/主干预：”套话前缀；该段首句必须直接以药名或动作起句。")
     vitaldb_action_rule = ""
     if kind == "vitaldb" and isinstance(snapshot, dict):
         hint = _golden_action_hint(snapshot)
-        actual = str(hint.get("actual_intervention") or "").strip()
+        actual = _clinical_logged_action_text(snapshot, str(hint.get("actual_intervention") or "").strip())
         anchor = snapshot.get("anchor_detail", {}) if isinstance(snapshot.get("anchor_detail"), dict) else {}
         before = _to_float(anchor.get("before"))
         after = _to_float(anchor.get("after"))
         med_key = str(anchor.get("medication_key") or "").strip()
         if actual:
             vitaldb_action_rule = (
-                f"VitalDB原始记录动作是：{actual}。"
-                "【具体干预】第一句必须忠实复述这个动作，不得改写成其他目标剂量/速率。"
+                f"VitalDB可执行动作锚点是：{actual}。"
+                "【具体干预】第一句必须写成临床可执行动作句，不得改写成其他目标剂量/速率。"
             )
-            if before is not None and after is not None:
+            if before is not None and after is not None and not str(med_key).upper().endswith("_VOL"):
                 vitaldb_action_rule += f"必须保留数值约 {before:.3f} -> {after:.3f}。"
+        if str(med_key).upper().endswith("_VOL"):
+            smoothed_rate = _to_float(anchor.get("smoothed_rate_ml_per_h"))
+            inferred_rate = _to_float(anchor.get("inferred_rate_ml_per_h"))
+            rate_for_rule = smoothed_rate if smoothed_rate is not None else inferred_rate
+            if rate_for_rule is not None:
+                vitaldb_action_rule += f"请改写为可执行泵速，保留约 {rate_for_rule:.2f} mL/h。"
+            rules.append(
+                "1.V) 若为累计量轨道（*_VOL），（A）主干预只能写“静脉泵注速率约X mL/h”等可执行动作；"
+                "不得在答案正文写累计量或“液量由A到B mL”类表达。累计量只允许保留在问题上下文的【麻醉药物维持状态】中。"
+            )
     if include_review:
         rules.append("2) 【复评环节】必须写复评时间、目标体征、预期演变、备用方案。")
         rules.append("3) “预期演变”必须明确写出预计多久后某指标变化到具体数值/范围（如：1分钟后HR回升至约75 bpm）。")
+        rules.append("3.1) 复评环节固定四行模板：复评时间：...；目标体征：...；预期演变：...；备用方案：...。")
         rules.append("4) 严格执行血流动力学保护锁：低血压/低灌注时先升压稳灌注，禁止优先推注丙泊酚。")
         rules.append("5) 全麻BIS目标范围40-60，禁止输出>60作为目标。")
         rules.append("6) EtCO2机制纠偏：EtCO2下降不得归因于“低通气/潮气量不足”常见原因。")
@@ -1523,6 +1688,30 @@ def _generate_branch(
                 metadata_leak_fn=_has_internal_metadata_leak,
                 is_hypotension_risk_fn=_is_hypotension_risk_snapshot,
             )
+            if not validation_final.get("valid", False):
+                repaired2 = _repair_structured_answer(
+                    url=url,
+                    headers=headers,
+                    model=model,
+                    kind=kind,
+                    question_text=question_text,
+                    raw_text=final_text,
+                    validation=validation_final,
+                    max_tokens=max_tokens,
+                    include_review=include_review,
+                    snapshot=snapshot,
+                )
+                if repaired2 and str(repaired2).strip():
+                    final_text = str(repaired2).strip()
+                    validation_final = _validate_structured_answer_external(
+                        kind=kind,
+                        text=final_text,
+                        include_review=include_review,
+                        snapshot=snapshot,
+                        vitaldb_logged_action_consistent_fn=_vitaldb_logged_action_consistent,
+                        metadata_leak_fn=_has_internal_metadata_leak,
+                        is_hypotension_risk_fn=_is_hypotension_risk_snapshot,
+                    )
 
     return {
         "error": None,
@@ -1828,6 +2017,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-

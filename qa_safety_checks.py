@@ -61,6 +61,31 @@ def vitaldb_logged_action_consistent(intervention_text: str, snapshot: Optional[
         return True
     text = str(intervention_text or "")
     values = _numeric_values_in_text(text)
+    if med_key.endswith("_VOL"):
+        rate_vals = [float(x) for x in re.findall(r"([-+]?\d+(?:\.\d+)?)\s*mL/h", text, flags=re.IGNORECASE)]
+        allowed_rates: List[float] = []
+        smoothed_rate = _to_float(anchor.get("smoothed_rate_ml_per_h"))
+        smoothed_dt = _to_float(anchor.get("smoothed_dt_sec"))
+        if smoothed_rate is not None and (smoothed_dt is None or smoothed_dt >= 30.0):
+            allowed_rates.append(smoothed_rate)
+        inferred_rate = _to_float(anchor.get("inferred_rate_ml_per_h"))
+        dt_sec = _to_float(anchor.get("dt_sec"))
+        if inferred_rate is not None and dt_sec is not None and dt_sec >= 10.0:
+            allowed_rates.append(inferred_rate)
+        actual_txt = str(snapshot.get("actual_intervention") or "")
+        if actual_txt:
+            for m in re.findall(r"([-+]?\d+(?:\.\d+)?)\s*mL/h", actual_txt, flags=re.IGNORECASE):
+                try:
+                    allowed_rates.append(float(m))
+                except Exception:
+                    continue
+        if allowed_rates:
+            return bool(rate_vals) and any(
+                any(abs(rv - ar) <= 2.0 for ar in allowed_rates) for rv in rate_vals
+            )
+        # For cumulative-volume anchors without a reliable derived rate, do not
+        # force before/after cumulative volumes into the clinical answer.
+        return True
     if before is not None and after is not None:
         tol = 0.75 if med_key.endswith("_RATE") else 0.5
         if med_key.endswith("_RATE") and not _has_ordered_transition_near(text, before, after, tol):
@@ -68,22 +93,6 @@ def vitaldb_logged_action_consistent(intervention_text: str, snapshot: Optional[
         ok = _has_number_near(values, before, tol) and _has_number_near(values, after, tol)
         if not ok:
             return False
-        if med_key.endswith("_VOL"):
-            rate_vals = [float(x) for x in re.findall(r"([-+]?\d+(?:\.\d+)?)\s*mL/h", text, flags=re.IGNORECASE)]
-            if rate_vals:
-                allowed_rates: List[float] = []
-                smoothed_rate = _to_float(anchor.get("smoothed_rate_ml_per_h"))
-                smoothed_dt = _to_float(anchor.get("smoothed_dt_sec"))
-                if smoothed_rate is not None and smoothed_dt is not None and smoothed_dt >= 30.0:
-                    allowed_rates.append(smoothed_rate)
-                inferred_rate = _to_float(anchor.get("inferred_rate_ml_per_h"))
-                dt_sec = _to_float(anchor.get("dt_sec"))
-                if inferred_rate is not None and dt_sec is not None and dt_sec >= 10.0:
-                    allowed_rates.append(inferred_rate)
-                if not allowed_rates:
-                    return False
-                if not any(any(abs(rv - ar) <= 2.0 for ar in allowed_rates) for rv in rate_vals):
-                    return False
         return True
     if delta is not None:
         return _has_number_near(values, abs(delta), 0.75) or _has_number_near(values, delta, 0.75)

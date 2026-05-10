@@ -4291,24 +4291,19 @@ def _extract_adverse_events(
         if evidence_key:
             evidence[evidence_key] = evidence_value
 
+    # Note: intraop_ebl/intraop_uo are typically case-level totals instead of
+    # true real-time values, so we keep them as evidence only and do not
+    # promote them to real-time adverse-event flags for QA supervision.
     ebl = _row_numeric_by_keys(row, ["intraop_ebl", "ebl", "blood_loss_ml"])
     if ebl is not None:
         evidence["ebl_ml"] = float(ebl)
-        if ebl >= 1000:
-            _add("major_bleeding", f"大出血风险（术中估计失血量约{ebl:.0f} mL）")
-        elif ebl >= 500:
-            _add("bleeding_warning", f"出血偏多预警（术中估计失血量约{ebl:.0f} mL）")
 
     uo = _row_numeric_by_keys(row, ["intraop_uo", "uo", "urine_output_ml"])
     if uo is not None:
         evidence["urine_output_ml"] = float(uo)
-        if uo <= 5:
-            _add("anuria_critical", f"危重少尿/无尿预警（术中尿量约{uo:.1f} mL）")
-        elif patient_weight_kg is not None and ane_dur_min is not None and ane_dur_min > 0:
+        if patient_weight_kg is not None and ane_dur_min is not None and ane_dur_min > 0:
             uo_rate = float(uo) / max(0.1, patient_weight_kg) / max(0.1, ane_dur_min / 60.0)
             evidence["urine_output_ml_per_kg_h"] = float(uo_rate)
-            if uo_rate < 0.5:
-                _add("oliguria_warning", f"尿量偏低预警（约{uo_rate:.2f} mL/kg/h）")
 
     potassium = _row_numeric_by_keys(
         row,
@@ -5001,9 +4996,37 @@ def _collect_concurrent_medications_at_anchor(
             },
         )
         if med_key.endswith("_RATE"):
+            rate_value = float(value)
+            # Robustify pump-rate display: suppress one-point spikes by local median.
+            if (
+                str(col).startswith("Orchestra/")
+                and med_key not in volatile_rate_keys
+                and med_key != "MAC_RATE"
+            ):
+                local = sub[
+                    (sub["t"] >= float(t_now) - 30.0)
+                    & (sub["t"] <= float(t_now) + 30.0)
+                ]["v"]
+                if len(local) >= 6:
+                    local_med = _safe_float(local.median())
+                    q1 = _safe_float(local.quantile(0.25))
+                    q3 = _safe_float(local.quantile(0.75))
+                    if local_med is not None and q1 is not None and q3 is not None:
+                        iqr = max(0.0, float(q3) - float(q1))
+                        lo = float(q1) - 3.0 * iqr
+                        hi = float(q3) + 3.0 * iqr
+                        if rate_value < lo or rate_value > hi:
+                            rate_value = float(local_med)
+
+                # If anchor itself is VOL for the same base, prefer anchor smoothed rate as stable context.
+                if base == anchor_base and anchor_med_key.endswith("_VOL"):
+                    anchor_smoothed = _safe_float(anchor.get("smoothed_rate_ml_per_h"))
+                    if anchor_smoothed is not None and abs(rate_value) > max(120.0, abs(float(anchor_smoothed)) * 3.0):
+                        rate_value = float(anchor_smoothed)
+
             item["rate_key"] = med_key
             item["rate_track"] = col
-            item["rate_value"] = float(value)
+            item["rate_value"] = rate_value
             if med_key in volatile_rate_keys:
                 item["rate_unit"] = "vol%"
             elif med_key == "MAC_RATE":
