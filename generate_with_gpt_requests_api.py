@@ -16,46 +16,19 @@ from anes_pipeline import (
     MEDICATION_DISPLAY,
     retrieve_miller_context,
 )
+from qa_answer_validation import validate_structured_answer as _validate_structured_answer_external
+from qa_prompt_blocks import (
+    build_answer_system_prompt as _build_answer_system_prompt_external,
+    compose_final_output as _compose_final_output_external,
+)
+from qa_safety_checks import (
+    has_internal_metadata_leak as _has_internal_metadata_leak,
+    vitaldb_logged_action_consistent as _vitaldb_logged_action_consistent,
+)
+from qa_text_constants import CN_TERM_MAP, SURGERY_CN_MAP
 
 
 RISK_LEVEL_ORDER = {"low": 0, "moderate": 1, "high": 2}
-
-CN_TERM_MAP = {
-    "M": "男性",
-    "F": "女性",
-    "Male": "男性",
-    "Female": "女性",
-    "General surgery": "普外科",
-    "Thoracic Surgery": "胸外科",
-    "Thoracic surgery": "胸外科",
-    "Cardiac Surgery": "心脏外科",
-    "Neurosurgery": "神经外科",
-    "Intraoperative": "术中",
-    "relative timestamp": "相对时间",
-    "Unknown": "暂缺",
-    "Unknown surgery": "手术名称暂缺",
-    "Advanced gastric cancer": "进展期胃癌",
-    "Aortic aneurysm": "主动脉瘤",
-    "Aortic aneurys": "主动脉瘤",
-    "Hepatocellular carcinoma": "肝细胞癌",
-    "Hepatic": "肝脏",
-    "Liver": "肝脏",
-    "Stomach": "胃",
-    "Vascular": "血管外科",
-    "Subtotal gastrectomy": "胃次全切除术",
-    "Liver segmentectomy": "肝段切除术",
-    "Aneurysmal repair": "动脉瘤修补术",
-    "Lobectomy": "肺叶切除术",
-    "VATS": "胸腔镜手术",
-}
-
-SURGERY_CN_MAP = {
-    "Subtotal gastrectomy": "胃次全切除术",
-    "Liver segmentectomy": "肝段切除术",
-    "Aneurysmal repair": "动脉瘤修补术",
-    "Lobectomy": "肺叶切除术",
-    "Video-assisted thoracoscopic surgery": "胸腔镜手术",
-}
 
 
 def _sanitize_for_json(obj: Any) -> Any:
@@ -212,6 +185,9 @@ def _snapshot_meta(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     adverse_event_types = assess.get("adverse_event_types", [])
     if not isinstance(adverse_event_types, list):
         adverse_event_types = []
+    alarm_tags = assess.get("alarm_tags", [])
+    if not isinstance(alarm_tags, list):
+        alarm_tags = []
     if not adverse_event_types:
         merged_flags: List[str] = []
         merged_flags.extend([str(x) for x in adverse_event_flags if str(x).strip()])
@@ -224,6 +200,7 @@ def _snapshot_meta(snapshot: Dict[str, Any]) -> Dict[str, Any]:
         "risk_flags": risk_flags,
         "adverse_event_flags": adverse_event_flags,
         "adverse_event_types": adverse_event_types,
+        "alarm_tags": alarm_tags,
         "baseline_comparison": assess.get("baseline_comparison", {}) if isinstance(assess.get("baseline_comparison"), dict) else {},
         "recent_state_mean": assess.get("recent_state_mean", {}) if isinstance(assess.get("recent_state_mean"), dict) else {},
         "persistence_seconds": assess.get("persistence_seconds", {}) if isinstance(assess.get("persistence_seconds"), dict) else {},
@@ -589,6 +566,12 @@ def _has_objective_alert(
 
 
 def _collect_present_alarm_tags(snapshot: Dict[str, Any], min_hr_relative_change_pct: float = 20.0) -> set[str]:
+    meta = _snapshot_meta(snapshot)
+    explicit_tags = {
+        _normalize_alarm_tag(str(x).strip())
+        for x in meta.get("alarm_tags", [])
+        if str(x).strip()
+    }
     alerts = _collect_indicator_alerts(
         snapshot,
         min_hr_relative_change_pct=min_hr_relative_change_pct,
@@ -606,7 +589,6 @@ def _collect_present_alarm_tags(snapshot: Dict[str, Any], min_hr_relative_change
             continue
         tags.add(_normalize_alarm_tag(indicator))
 
-    meta = _snapshot_meta(snapshot)
     event_types = {str(x).strip().lower() for x in meta.get("adverse_event_types", []) if str(x).strip()}
     if {"malignant_arrhythmia", "arrhythmia_event"} & event_types:
         tags.add("ECG")
@@ -620,6 +602,7 @@ def _collect_present_alarm_tags(snapshot: Dict[str, Any], min_hr_relative_change
         tags.add("Urine Output")
     if {"major_bleeding", "bleeding_warning"} & event_types:
         tags.add("Blood Loss")
+    tags |= explicit_tags
     return tags
 
 
@@ -884,21 +867,26 @@ def _format_maintenance_state(snapshot: Dict[str, Any]) -> str:
         paired_volume_ml = _to_float(anchor.get("paired_volume_ml"))
         paired_volume_key = _safe_text(anchor.get("paired_volume_key"), "")
         paired_label = MEDICATION_DISPLAY.get(paired_volume_key, _to_cn_text(paired_volume_key)) if paired_volume_key else ""
-        if before is not None and after is not None:
-            pieces.append(f"速率 {before:.2f}→{after:.2f} mL/h")
-            if delta is not None:
-                pieces.append(f"变化 {delta:+.2f} mL/h")
+        current_rate = rate
+        if current_rate is None:
+            current_rate = after
+        if current_rate is not None:
+            pieces.append(f"当前速率约 {current_rate:.2f} mL/h")
         elif delta is not None:
             pieces.append(f"速率变化 {delta:+.3f} mL/h")
-        elif rate is not None:
-            pieces.append(f"当前速率约 {rate:.2f} mL/h")
         if paired_volume_ml is not None and paired_label:
             pieces.append(f"同时间点{paired_label}约 {paired_volume_ml:.2f} mL")
         return "；".join(pieces)
 
     if rate is not None:
         pieces.append(f"当前平滑泵速约 {rate:.2f} mL/h")
-    if before is not None and after is not None:
+    if med_key_upper.endswith("_VOL"):
+        current_vol = after if after is not None else before
+        if current_vol is not None:
+            pieces.append(f"当前累计量约 {current_vol:.2f} mL")
+        elif delta is not None:
+            pieces.append(f"本次变化 {delta:+.3f} mL")
+    elif before is not None and after is not None:
         pieces.append(f"累计量 {before:.2f}→{after:.2f} mL")
     elif delta is not None:
         unit = " mL" if med_key_upper.endswith("_VOL") else ""
@@ -1219,33 +1207,7 @@ def _build_fixed_question(snapshot: Dict[str, Any]) -> str:
 
 
 def _build_answer_system_prompt(kind: str, include_review: bool = True) -> str:
-    if kind == "miller":
-        if include_review:
-            return (
-                "你是资深麻醉医生。仅输出中文。"
-                "必须使用以下标题并按顺序输出："
-                "【临床推理】、【宏观策略】、【具体干预】、【复评环节】、【原文摘录】。"
-                "不得输出markdown代码块，不得输出额外说明。"
-            )
-        return (
-            "你是资深麻醉医生。仅输出中文。"
-            "必须使用以下标题并按顺序输出："
-            "【临床推理】、【宏观策略】、【具体干预】、【原文摘录】。"
-            "不得输出markdown代码块，不得输出额外说明。"
-        )
-    if include_review:
-        return (
-            "你是资深麻醉医生。仅输出中文。"
-            "必须使用以下标题并按顺序输出："
-            "【临床推理】、【宏观策略】、【具体干预】、【复评环节】。"
-            "不得输出markdown代码块，不得输出额外说明。"
-        )
-    return (
-        "你是资深麻醉医生。仅输出中文。"
-        "必须使用以下标题并按顺序输出："
-        "【临床推理】、【宏观策略】、【具体干预】。"
-        "不得输出markdown代码块，不得输出额外说明。"
-    )
+    return _build_answer_system_prompt_external(kind, include_review=include_review)
 
 
 def _build_answer_user_prompt(
@@ -1257,7 +1219,9 @@ def _build_answer_user_prompt(
 ) -> str:
     hint = _golden_action_hint(snapshot)
     med_key = hint.get("medication_key", "")
+    med_key_upper = str(med_key or "").upper()
     actual = hint.get("actual_intervention", "")
+    actual_bundle = str(hint.get("actual_intervention_bundle") or "").strip()
     kws = ", ".join(hint.get("keywords", [])) if isinstance(hint.get("keywords"), list) else ""
     expected_unit = _expected_action_unit(snapshot) or "mL/h or mL"
     route = _infer_route(snapshot)
@@ -1295,6 +1259,11 @@ def _build_answer_user_prompt(
     constraints.extend(
         [
             f"VitalDB版的主干预必须锚定原始记录动作，不得把未记录动作写成已发生的VitalDB干预。原始记录动作：{actual}；药物关键词：{kws}。",
+            (
+                f"同一警报窗口内还记录到以下药物变化，可作为VitalDB真实并行处理背景一起讨论：{actual_bundle}。"
+                if actual_bundle
+                else "若未提供同一警报窗口内其它药物变化，不要虚构多药物处理。"
+            ),
             "【具体干预】第一句必须复述/改写logged_action中的同类药物、方向和数值；"
             "未在logged_action中出现的给药、补液、升压、减药等只能作为“同步安全处理”或“备用方案”，不得新增具体药物剂量作为主决策。",
             "最终输出不得出现任何内部元字段或提示词痕迹，如“med_key=”“logged_action=”“keywords=”等。",
@@ -1311,6 +1280,10 @@ def _build_answer_user_prompt(
             "不要写“缺失/暂无/不可用”等字样。",
         ]
     )
+    if med_key_upper.endswith("_VOL"):
+        constraints.append(
+            "若锚点是累计量轨道（*_VOL），【具体干预】主句必须以“累计量 before->after mL（及变化量）”复述，不要把其改写为新的目标速率。"
+        )
     if low_perf_risk:
         map_txt = f"{map_now:.1f}" if map_now is not None else "暂缺"
         sbp_txt = f"{sbp_now:.1f}" if sbp_now is not None else "暂缺"
@@ -1361,36 +1334,6 @@ def _post_chat_with_system(
     return str(obj["choices"][0]["message"]["content"]).strip()
 
 
-def _extract_section(text: str, title: str, next_titles: Sequence[str]) -> str:
-    norm_text = str(text or "").replace("\u3000", " ")
-    norm_title = str(title or "").replace("\u3000", " ")
-    start = norm_text.find(norm_title)
-    if start < 0:
-        # tolerant match: ignore spaces around title tokens
-        alt = re.search(re.escape(norm_title).replace("\\ ", r"\s*"), norm_text)
-        if not alt:
-            return ""
-        start = alt.start()
-        title_len = alt.end() - alt.start()
-    else:
-        title_len = len(norm_title)
-    if start < 0:
-        return ""
-    start = start + title_len
-    rest = norm_text[start:]
-    end_idx = len(rest)
-    for nt in next_titles:
-        nnt = str(nt or "").replace("\u3000", " ")
-        pos = rest.find(nnt)
-        if pos < 0:
-            alt = re.search(re.escape(nnt).replace("\\ ", r"\s*"), rest)
-            if alt:
-                pos = alt.start()
-        if pos >= 0:
-            end_idx = min(end_idx, pos)
-    return rest[:end_idx].strip("：: \n")
-
-
 def _is_hypotension_risk_snapshot(snapshot: Optional[Dict[str, Any]]) -> bool:
     if not isinstance(snapshot, dict):
         return False
@@ -1412,189 +1355,21 @@ def _is_hypotension_risk_snapshot(snapshot: Optional[Dict[str, Any]]) -> bool:
     return False
 
 
-def _has_propofol_bolus_like_text(text: str) -> bool:
-    t = str(text or "")
-    return bool(
-        re.search(r"(丙泊酚|propofol)", t, re.IGNORECASE)
-        and re.search(r"(推注|bolus|追加|单次|静脉推注)", t, re.IGNORECASE)
-    )
-
-
-def _mentions_hemo_stabilization_first(text: str) -> bool:
-    t = str(text or "")
-    return bool(
-        re.search(
-            r"(先升压|优先升压|先纠正灌注|循环稳定后|血压稳定后|MAP恢复后|SBP恢复后|灌注恢复后)",
-            t,
-            re.IGNORECASE,
-        )
-    )
-
-
-def _has_unsafe_bis_target(text: str) -> bool:
-    t = str(text or "")
-    target_words = r"(?:目标|维持|控制|平稳|调整|降至|回落至)"
-    for m in re.finditer(
-        rf"BIS[^\n。；;]{{0,30}}?{target_words}[^\n。；;]{{0,20}}?(\d{{2,3}})\s*[-~～至到]\s*(\d{{2,3}})",
-        t,
-        re.IGNORECASE,
-    ):
-        try:
-            lo = int(m.group(1))
-            hi = int(m.group(2))
-        except Exception:
-            continue
-        if max(lo, hi) > 60:
-            return True
-    for m in re.finditer(
-        rf"BIS[^\n。；;]{{0,30}}?{target_words}[^\n。；;]{{0,12}}?(\d{{2,3}})",
-        t,
-        re.IGNORECASE,
-    ):
-        try:
-            v = int(m.group(1))
-        except Exception:
-            continue
-        if v > 60:
-            return True
-    return False
-
-
-def _has_etco2_drop_low_ventilation_mismatch(reasoning_text: str) -> bool:
-    t = str(reasoning_text or "")
-    mismatch = re.search(
-        r"(EtCO2|二氧化碳)[^。\n]{0,40}(骤降|下降|降低|偏低)[^。\n]{0,80}(潮气量不足|低通气|通气不足)",
-        t,
-        re.IGNORECASE,
-    )
-    return bool(mismatch)
-
-
-def _numeric_values_in_text(text: str) -> List[float]:
-    vals: List[float] = []
-    for m in re.finditer(r"(?<![A-Za-z])[-+]?\d+(?:\.\d+)?", str(text or "")):
-        try:
-            vals.append(float(m.group(0)))
-        except Exception:
-            continue
-    return vals
-
-
-def _has_number_near(values: Sequence[float], target: float, tolerance: float = 0.75) -> bool:
-    return any(abs(float(v) - float(target)) <= tolerance for v in values)
-
-
-def _vitaldb_logged_action_consistent(intervention_text: str, snapshot: Optional[Dict[str, Any]]) -> bool:
-    if not isinstance(snapshot, dict):
-        return True
-    anchor = snapshot.get("anchor_detail", {}) if isinstance(snapshot.get("anchor_detail"), dict) else {}
-    med_key = str(anchor.get("medication_key") or "").upper()
-    before = _to_float(anchor.get("before"))
-    after = _to_float(anchor.get("after"))
-    delta = _to_float(anchor.get("delta"))
-    if not med_key or med_key in {"ARR_EVENT", "UNLABELED_EVENT"}:
-        return True
-    text = str(intervention_text or "")
-    values = _numeric_values_in_text(text)
-    if before is not None and after is not None:
-        # RATE/volatile/MAC tracks store the actual setting before and after the
-        # recorded intervention. The answer must not invent a different target.
-        tol = 0.75 if med_key.endswith("_RATE") else 0.5
-        return _has_number_near(values, before, tol) and _has_number_near(values, after, tol)
-    if delta is not None:
-        return _has_number_near(values, abs(delta), 0.75) or _has_number_near(values, delta, 0.75)
-    return True
-
-
-def _has_internal_metadata_leak(text: str) -> bool:
-    t = str(text or "")
-    patterns = [
-        r"(?i)\bmed_key\s*=",
-        r"(?i)\blogged_action\s*=",
-        r"(?i)\bkeywords\s*=",
-        r"(?i)\banchor_detail\b",
-    ]
-    return any(re.search(p, t) for p in patterns)
-
-
 def _validate_structured_answer(
     kind: str,
     text: str,
     include_review: bool = True,
     snapshot: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    out = {"valid": True, "reasons": []}
-    if not text or not str(text).strip():
-        return {"valid": False, "reasons": ["empty_output"]}
-    t = str(text).strip()
-    sections = ["【临床推理】", "【宏观策略】", "【具体干预】"]
-    if include_review:
-        sections.append("【复评环节】")
-    if kind == "miller":
-        sections.append("【原文摘录】")
-    for s in sections:
-        if s not in t:
-            out["valid"] = False
-            out["reasons"].append(f"missing_{s}")
-    route_keywords = ("静脉推注", "静脉泵注", "静脉滴注", "吸入", "雾化", "肌注", "皮下注", "口服")
-    next_titles = []
-    if include_review:
-        next_titles.append("【复评环节】")
-    if kind == "miller":
-        next_titles.append("【原文摘录】")
-    intervention = _extract_section(t, "【具体干预】", next_titles)
-    if not any(k in intervention for k in route_keywords):
-        out["valid"] = False
-        out["reasons"].append("missing_route")
-    if not bool(re.search(r"\d+(?:\.\d+)?\s*(?:mL/h|mL|mg|ug|μg/kg/min|mmHg|bpm|%|vol%|MAC)", intervention, re.IGNORECASE)):
-        out["valid"] = False
-        out["reasons"].append("missing_quantitative_dose")
-    if kind == "vitaldb" and not _vitaldb_logged_action_consistent(intervention, snapshot):
-        out["valid"] = False
-        out["reasons"].append("vitaldb_logged_action_numeric_mismatch")
-    if _has_internal_metadata_leak(t):
-        out["valid"] = False
-        out["reasons"].append("internal_metadata_leak")
-    if include_review:
-        review = _extract_section(t, "【复评环节】", ["【原文摘录】"])
-        if not bool(re.search(r"\d+(?:\.\d+)?\s*(?:s|sec|秒|min|分钟)", review, re.IGNORECASE)):
-            out["valid"] = False
-            out["reasons"].append("missing_recheck_time")
-        if "预期演变" not in review:
-            out["valid"] = False
-            out["reasons"].append("missing_expected_evolution_field")
-        evo_target_pattern = (
-            r"(?:回升|下降|维持|恢复|达到|至|到)[^\n。；;]*\d+(?:\.\d+)?\s*"
-            r"(?:mmHg|bpm|%|mL/h|mL|mg|ug|μg/kg/min|℃|vol%|MAC)"
-            r"|"
-            r"\d+(?:\.\d+)?\s*(?:mmHg|bpm|%|mL/h|mL|mg|ug|μg/kg/min|℃|vol%|MAC)[^\n。；;]*"
-            r"(?:回升|下降|维持|恢复|达到|至|到)"
-        )
-        if not bool(re.search(evo_target_pattern, review, re.IGNORECASE)):
-            out["valid"] = False
-            out["reasons"].append("missing_expected_evolution_target")
-    if kind == "miller":
-        quote = _extract_section(t, "【原文摘录】", [])
-        if not bool(re.search(r"(?i)M10#\d+", quote)):
-            out["valid"] = False
-            out["reasons"].append("missing_m10_locator")
-        if not bool(re.search(r"(?i)\bp\.\s*\d+", quote)):
-            out["valid"] = False
-            out["reasons"].append("missing_page_locator")
-
-    # Clinical safety hard-locks.
-    if _is_hypotension_risk_snapshot(snapshot):
-        if _has_propofol_bolus_like_text(intervention) and (not _mentions_hemo_stabilization_first(intervention)):
-            out["valid"] = False
-            out["reasons"].append("hemodynamic_lock_violation_propofol_under_hypotension")
-    if _has_unsafe_bis_target(t):
-        out["valid"] = False
-        out["reasons"].append("unsafe_bis_target_above_60_in_general_anesthesia")
-    reasoning = _extract_section(t, "【临床推理】", ["【宏观策略】", "【具体干预】", "【复评环节】", "【原文摘录】"])
-    if _has_etco2_drop_low_ventilation_mismatch(reasoning):
-        out["valid"] = False
-        out["reasons"].append("etco2_drop_mechanism_mismatch_low_ventilation")
-    return out
+    return _validate_structured_answer_external(
+        kind=kind,
+        text=text,
+        include_review=include_review,
+        snapshot=snapshot,
+        vitaldb_logged_action_consistent_fn=_vitaldb_logged_action_consistent,
+        metadata_leak_fn=_has_internal_metadata_leak,
+        is_hypotension_risk_fn=_is_hypotension_risk_snapshot,
+    )
 
 
 def _repair_structured_answer(
@@ -1634,7 +1409,7 @@ def _repair_structured_answer(
                 "【具体干预】第一句必须忠实复述这个动作，不得改写成其他目标剂量/速率。"
             )
             if before is not None and after is not None:
-                vitaldb_action_rule += f"必须保留数值约 {before:.3f} -> {after:.3f}；med_key={med_key}。"
+                vitaldb_action_rule += f"必须保留数值约 {before:.3f} -> {after:.3f}。"
     if include_review:
         rules.append("2) 【复评环节】必须写复评时间、目标体征、预期演变、备用方案。")
         rules.append("3) “预期演变”必须明确写出预计多久后某指标变化到具体数值/范围（如：1分钟后HR回升至约75 bpm）。")
@@ -1673,20 +1448,11 @@ def _compose_final_output(
     miller_text: str,
     include_miller: bool = True,
 ) -> str:
-    if not include_miller:
-        return (
-            "Q (Input Context)\n"
-            f"{question_text}\n\n"
-            "Answer（VitalDB版）\n"
-            f"{vitaldb_text}"
-        )
-    return (
-        "Q (Input Context)\n"
-        f"{question_text}\n\n"
-        "Answer（VitalDB版）\n"
-        f"{vitaldb_text}\n\n"
-        "Answer（Miller版）\n"
-        f"{miller_text}"
+    return _compose_final_output_external(
+        question_text=question_text,
+        vitaldb_text=vitaldb_text,
+        miller_text=miller_text,
+        include_miller=include_miller,
     )
 
 
@@ -1701,7 +1467,7 @@ def _generate_branch(
     max_tokens: int,
     include_review: bool = True,
 ) -> Dict[str, Any]:
-    system_prompt = _build_answer_system_prompt(kind, include_review=include_review)
+    system_prompt = _build_answer_system_prompt_external(kind, include_review=include_review)
     user_prompt = _build_answer_user_prompt(kind, question_text, snapshot, retrieval, include_review=include_review)
 
     try:
@@ -1719,11 +1485,14 @@ def _generate_branch(
             "user_prompt": user_prompt,
         }
 
-    validation_raw = _validate_structured_answer(
-        kind,
-        raw,
+    validation_raw = _validate_structured_answer_external(
+        kind=kind,
+        text=raw,
         include_review=include_review,
         snapshot=snapshot,
+        vitaldb_logged_action_consistent_fn=_vitaldb_logged_action_consistent,
+        metadata_leak_fn=_has_internal_metadata_leak,
+        is_hypotension_risk_fn=_is_hypotension_risk_snapshot,
     )
     final_text = raw
     repaired_text = ""
@@ -1745,11 +1514,14 @@ def _generate_branch(
         if repaired and str(repaired).strip():
             repaired_text = str(repaired).strip()
             final_text = repaired_text
-            validation_final = _validate_structured_answer(
-                kind,
-                final_text,
+            validation_final = _validate_structured_answer_external(
+                kind=kind,
+                text=final_text,
                 include_review=include_review,
                 snapshot=snapshot,
+                vitaldb_logged_action_consistent_fn=_vitaldb_logged_action_consistent,
+                metadata_leak_fn=_has_internal_metadata_leak,
+                is_hypotension_risk_fn=_is_hypotension_risk_snapshot,
             )
 
     return {
@@ -1814,7 +1586,7 @@ def _generate_one(
 
     vitaldb_text = str(vitaldb_result.get("final_output") or "").strip()
     miller_text = str(miller_result.get("final_output") or "").strip()
-    final_output = _compose_final_output(question_text, vitaldb_text, miller_text, include_miller=(not vitaldb_only))
+    final_output = _compose_final_output_external(question_text, vitaldb_text, miller_text, include_miller=(not vitaldb_only))
 
     error_parts: List[str] = []
     if vitaldb_result.get("error"):
